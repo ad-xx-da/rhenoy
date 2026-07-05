@@ -1,121 +1,139 @@
 import Image from "next/image";
 import Link from "next/link";
-import { products } from "@/data/products";
-import FeaturedProducts from "@/components/FeaturedProducts";
 import EmailCapture from "@/components/EmailCapture";
 
 export default function Home() {
-  const picks = products.slice(0, 3);
-
   return (
     <div className="bg-cream">
       {/* ── Hero ────────────────────────────────────────────────────── */}
-      <section className="flex min-h-[560px] sm:min-h-[640px]">
-        {/* Text half */}
-        <div className="flex-1 flex items-center px-6 sm:px-10 pt-20 pb-16 sm:pt-24 sm:pb-20 bg-cream">
-          <div className="max-w-[480px]">
-            <h1
-              className="font-display italic text-charcoal leading-[1.08] mb-6"
-              style={{ fontSize: "clamp(2.4rem, 5vw, 4.2rem)", fontWeight: 300 }}
-            >
-              Fashion is overwhelming.
-              <br />
-              We made it quiet.
-            </h1>
-            <p className="text-[15px] font-light text-charcoal/60 max-w-md leading-relaxed mb-10">
-              Every piece is scored for what it&rsquo;s made of, what it costs to
-              make, and whether it&rsquo;s worth it.
-            </p>
-            <Link
-              href="/shop"
-              className="text-[13px] text-charcoal hover:text-charcoal/60 transition-colors"
-            >
-              Explore the collection →
-            </Link>
+      <section
+        className="max-w-6xl mx-auto px-6 sm:px-16 pt-28 pb-20 sm:pt-36 sm:pb-28"
+        style={{ borderBottom: "1px solid #E8C8BE" }}
+      >
+        <h1
+          className="font-display italic text-charcoal leading-[1.06] mb-6"
+          style={{
+            fontSize: "clamp(2.8rem, 6vw, 5.2rem)",
+            fontWeight: 400,
+            maxWidth: "740px",
+            fontFamily: "var(--font-cormorant)",
+          }}
+        >
+          Fashion is overwhelming.
+          <br />
+          We made it quiet.
+        </h1>
+        <p
+          className="text-[15px] font-light text-charcoal/60 leading-relaxed"
+          style={{ maxWidth: "480px" }}
+        >
+          A community platform helping you navigate to better clothing. Every
+          piece is scored for breathability, cleanliness, and fair price &mdash;
+          so you can choose well.
+        </p>
+      </section>
+
+      {/* ── Journal teaser ──────────────────────────────────────────── */}
+      <section style={{ backgroundColor: "#EDE8DC" }}>
+        <div className="max-w-6xl mx-auto px-6 sm:px-16">
+          <div className="flex flex-col sm:flex-row sm:items-stretch gap-0">
+            {/* Text */}
+            <div className="flex-1 py-12 sm:py-16 sm:pr-12 flex flex-col justify-center">
+              <p className="text-[10px] tracking-[0.3em] uppercase text-charcoal/50 mb-4">
+                June 2026
+              </p>
+              <h2
+                className="font-display italic text-charcoal leading-snug mb-4"
+                style={{
+                  fontSize: "clamp(1.5rem, 3vw, 2.2rem)",
+                  fontWeight: 300,
+                  fontFamily: "var(--font-cormorant)",
+                }}
+              >
+                36 Degrees and Still Wearing Plastic
+              </h2>
+              <p className="text-[13px] font-light text-charcoal/60 leading-relaxed mb-6">
+                Europe is sweating through another record summer. Your wardrobe
+                may be making it worse.
+              </p>
+              <Link
+                href="/journal"
+                className="text-[12px] text-charcoal hover:text-charcoal/50 transition-colors self-start"
+              >
+                Read the journal →
+              </Link>
+            </div>
+            {/* Image */}
+            <div className="hidden sm:block relative w-[42%] flex-shrink-0">
+              <Image
+                src="/images/beach-heat.jpg"
+                alt=""
+                fill
+                className="object-cover"
+              />
+            </div>
           </div>
         </div>
-        {/* Image half */}
-        <div className="hidden sm:block relative w-[50%] flex-shrink-0">
-          <Image
-            src="/images/pexels-marina-zasorina-9374415.jpg"
-            alt=""
-            fill
-            className="object-cover"
-            priority
-          />
-        </div>
       </section>
 
-      {/* ── What we do ──────────────────────────────────────────────── */}
-      <section
-        className="max-w-6xl mx-auto px-6 sm:px-10 py-16 sm:py-20"
-        style={{ borderTop: "1px solid #EDE8DC" }}
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-10 sm:gap-16">
-          <WhatWeDoColumn
-            label="We find it"
-            body="Curated picks across natural and low-impact materials. We look so you don't have to."
-          />
-          <WhatWeDoColumn
-            label="We score it"
-            body="Each piece is rated for breathability, material cleanliness, and fair pricing — with the numbers shown."
-          />
-          <WhatWeDoColumn
-            label="You choose"
-            body="With the full picture in front of you — not just the marketing — to decide what's worth your money."
-          />
+      {/* ── Three pillars ───────────────────────────────────────────── */}
+      <section style={{ backgroundColor: "#2C2B27" }}>
+        <div className="max-w-6xl mx-auto px-6 sm:px-16">
+          <div className="grid grid-cols-1 sm:grid-cols-3">
+            <Pillar
+              label="We find it"
+              body="Curated picks across natural and low-tox materials"
+              border={false}
+            />
+            <Pillar
+              label="We score it"
+              body="Breathability, clean score, fair price range"
+              border={true}
+            />
+            <Pillar
+              label="You choose"
+              body="With the full picture, not just the marketing"
+              border={true}
+            />
+          </div>
         </div>
-      </section>
-
-      {/* ── Atmospheric divider ─────────────────────────────────────── */}
-      <div className="relative w-full h-[340px] sm:h-[440px] overflow-hidden">
-        <Image
-          src="/images/pexels-cottonbro-5590903.jpg"
-          alt=""
-          fill
-          className="object-cover"
-        />
-        <div className="absolute inset-0 bg-charcoal/30" />
-      </div>
-
-      {/* ── Latest picks ────────────────────────────────────────────── */}
-      <section
-        className="max-w-6xl mx-auto px-6 sm:px-10 py-16 sm:py-20"
-        style={{ borderTop: "1px solid #EDE8DC" }}
-      >
-        <div className="flex items-baseline justify-between mb-10">
-          <h2
-            className="font-display italic text-charcoal"
-            style={{ fontSize: "1.75rem", fontWeight: 300 }}
-          >
-            Latest picks
-          </h2>
-          <Link
-            href="/shop"
-            className="text-[12px] text-charcoal/50 hover:text-charcoal transition-colors"
-          >
-            See all picks →
-          </Link>
-        </div>
-        <FeaturedProducts products={picks} />
       </section>
 
       {/* ── Email capture ───────────────────────────────────────────── */}
-      <section
-        className="max-w-6xl mx-auto px-6 sm:px-10 py-16 sm:py-20"
-        style={{ borderTop: "1px solid #EDE8DC" }}
-      >
-        <EmailCapture />
+      <section style={{ backgroundColor: "#EDE8DC" }}>
+        <div className="max-w-6xl mx-auto px-6 sm:px-16 py-16 sm:py-20">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-10 sm:gap-16">
+            <div className="flex-1">
+              <h2
+                className="font-display italic text-charcoal mb-3"
+                style={{
+                  fontSize: "clamp(1.5rem, 3vw, 2.1rem)",
+                  fontWeight: 300,
+                  fontFamily: "var(--font-cormorant)",
+                }}
+              >
+                Stay in the loop.
+              </h2>
+              <p className="text-[14px] font-light text-charcoal/60 leading-relaxed max-w-sm">
+                We&rsquo;ll let you know when the shop and calculator go live.
+                No noise, just signal.
+              </p>
+            </div>
+            <div className="flex-1">
+              <EmailCapture hideHeading />
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* ── Footer ──────────────────────────────────────────────────── */}
       <footer
-        className="max-w-6xl mx-auto px-6 sm:px-10 py-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+        className="max-w-6xl mx-auto px-6 sm:px-16 py-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
         style={{ borderTop: "1px solid #EDE8DC" }}
       >
         <span
           className="font-display italic text-charcoal text-lg"
-          style={{ fontWeight: 300 }}
+          style={{ fontWeight: 300, fontFamily: "var(--font-cormorant)" }}
         >
           rhenoy collective
         </span>
@@ -126,7 +144,6 @@ export default function Home() {
           {[
             { href: "/shop", label: "Shop" },
             { href: "/journal", label: "Journal" },
-            { href: "/calculator", label: "Calculator" },
           ].map(({ href, label }) => (
             <Link
               key={href}
@@ -142,19 +159,31 @@ export default function Home() {
   );
 }
 
-function WhatWeDoColumn({
+function Pillar({
   label,
   body,
+  border,
 }: {
   label: string;
   body: string;
+  border: boolean;
 }) {
   return (
-    <div>
-      <p className="text-[10px] tracking-widest uppercase text-charcoal mb-3">
+    <div
+      className="py-10 sm:py-14 px-0 sm:px-10"
+      style={
+        border
+          ? { borderLeft: "1px solid rgba(247,244,238,0.12)" }
+          : undefined
+      }
+    >
+      <p
+        className="text-[10px] tracking-[0.3em] uppercase mb-3"
+        style={{ color: "#E8C8BE" }}
+      >
         {label}
       </p>
-      <p className="text-[13px] font-light text-charcoal/60 leading-relaxed">
+      <p className="text-[13px] font-light leading-relaxed" style={{ color: "rgba(247,244,238,0.65)" }}>
         {body}
       </p>
     </div>

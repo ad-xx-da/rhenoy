@@ -32,7 +32,7 @@ function DaisyMark() {
 }
 
 const NAV_LINKS = [
-  { href: "/shop", label: "Shop", comingSoon: true },
+  { href: "/shop", label: "Shop", comingSoon: false },
   { href: "/journal", label: "Journal", comingSoon: false },
   { href: "/calculator", label: "Calculator", comingSoon: true },
 ];
