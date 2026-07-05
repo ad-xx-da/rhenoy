@@ -1,0 +1,425 @@
+"use client";
+
+import { useState } from "react";
+import { calcScores, matchFiber, FIBERS, type TransparencyValue, type FiberRow } from "@/lib/score";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+type ScrapeResult = {
+  productName: string | null;
+  brand: string | null;
+  fibres: { name: string; percentage: number }[] | null;
+  price: number | null;
+  currency: string | null;
+  dataCompleteness: number | null;
+};
+
+type EditableProduct = {
+  url: string;
+  brand: string;
+  product_name: string;
+  fibre_composition: FiberRow[];
+  price: number;
+  fair_price_low: number;
+  fair_price_high: number;
+  breathability_score: number;
+  clean_score: number;
+  factory_transparency: TransparencyValue;
+  data_completeness: number;
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function buildEditable(url: string, raw: ScrapeResult, transparency: TransparencyValue): EditableProduct {
+  const fibreRows: FiberRow[] = (raw.fibres ?? []).map((f) => ({
+    fiber: matchFiber(f.name),
+    pct: f.percentage ?? 0,
+  }));
+  const price = raw.price ?? 0;
+  const scores = calcScores(fibreRows, transparency, price);
+  return {
+    url,
+    brand: raw.brand ?? "",
+    product_name: raw.productName ?? "",
+    fibre_composition: fibreRows,
+    price,
+    fair_price_low: scores.fairPriceLow,
+    fair_price_high: scores.fairPriceHigh,
+    breathability_score: scores.breathability,
+    clean_score: scores.clean,
+    factory_transparency: transparency,
+    data_completeness: raw.dataCompleteness ?? 0,
+  };
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[10px] tracking-[0.25em] uppercase text-charcoal/50 mb-1">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const inputCls =
+  "w-full bg-cream border border-[#C8BFB0] text-charcoal text-[13px] px-3 py-2 focus:outline-none focus:border-charcoal/40 transition-colors";
+
+// ── Main ─────────────────────────────────────────────────────────────────────
+
+export default function AdminPage() {
+  const [password, setPassword] = useState("");
+  const [authed, setAuthed] = useState(false);
+  const [authError, setAuthError] = useState(false);
+
+  const [url, setUrl] = useState("");
+  const [scraping, setScraping] = useState(false);
+  const [scrapeError, setScrapeError] = useState<string | null>(null);
+
+  const [product, setProduct] = useState<EditableProduct | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+
+  async function handleAuth(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await fetch("/api/products", {
+      headers: { "x-admin-password": password },
+    });
+    if (res.ok) {
+      setAuthed(true);
+      setAuthError(false);
+    } else {
+      // Just check against what the server returns on a GET — no real auth needed
+      // We'll validate on POST. For now accept anything and validate on save.
+      setAuthed(true);
+    }
+  }
+
+  // ── Scrape ────────────────────────────────────────────────────────────────
+
+  async function handleScrape(e: React.FormEvent) {
+    e.preventDefault();
+    if (!url.trim()) return;
+    setScraping(true);
+    setScrapeError(null);
+    setProduct(null);
+    setSaved(false);
+
+    try {
+      const res = await fetch("/api/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail ?? data.error ?? "Scrape failed");
+      setProduct(buildEditable(url.trim(), data, "partial"));
+    } catch (err) {
+      setScrapeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setScraping(false);
+    }
+  }
+
+  // ── Recompute scores when fibres/transparency/price change ────────────────
+
+  function updateProduct(patch: Partial<EditableProduct>) {
+    if (!product) return;
+    const next = { ...product, ...patch };
+    const scores = calcScores(next.fibre_composition, next.factory_transparency, next.price);
+    setProduct({
+      ...next,
+      breathability_score: scores.breathability,
+      clean_score: scores.clean,
+      fair_price_low: scores.fairPriceLow,
+      fair_price_high: scores.fairPriceHigh,
+    });
+  }
+
+  function updateFibreRow(i: number, key: "fiber" | "pct", val: string | number) {
+    if (!product) return;
+    const rows = [...product.fibre_composition];
+    rows[i] = { ...rows[i], [key]: key === "pct" ? Number(val) : val };
+    updateProduct({ fibre_composition: rows });
+  }
+
+  function addFibreRow() {
+    if (!product) return;
+    updateProduct({ fibre_composition: [...product.fibre_composition, { fiber: "cotton-conv", pct: 0 }] });
+  }
+
+  function removeFibreRow(i: number) {
+    if (!product) return;
+    const rows = product.fibre_composition.filter((_, idx) => idx !== i);
+    updateProduct({ fibre_composition: rows });
+  }
+
+  // ── Save ──────────────────────────────────────────────────────────────────
+
+  async function handleSave() {
+    if (!product) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-password": password,
+        },
+        body: JSON.stringify(product),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Save failed");
+      setSaved(true);
+      setProduct(null);
+      setUrl("");
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  if (!authed) {
+    return (
+      <div className="min-h-screen bg-cream flex items-center justify-center px-6">
+        <div className="w-full max-w-sm">
+          <p
+            className="font-display italic text-charcoal mb-8"
+            style={{ fontSize: "1.6rem", fontWeight: 300, fontFamily: "var(--font-cormorant)" }}
+          >
+            Admin
+          </p>
+          <form onSubmit={handleAuth} className="flex flex-col gap-3">
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={inputCls}
+              autoFocus
+            />
+            <button
+              type="submit"
+              className="px-4 py-2 text-[12px] text-charcoal"
+              style={{ backgroundColor: "#E8C8BE", borderRadius: 0 }}
+            >
+              Enter
+            </button>
+          </form>
+          {authError && (
+            <p className="text-[12px] text-charcoal/40 mt-3">Incorrect password.</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-cream px-6 sm:px-10 pt-24 pb-20">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="mb-10" style={{ borderBottom: "1px solid #EDE8DC", paddingBottom: "1.5rem" }}>
+          <p className="text-[10px] tracking-[0.3em] uppercase text-charcoal/40 mb-1">Admin</p>
+          <h1
+            className="font-display italic text-charcoal"
+            style={{ fontSize: "2rem", fontWeight: 300, fontFamily: "var(--font-cormorant)" }}
+          >
+            Add a product
+          </h1>
+        </div>
+
+        {/* URL input */}
+        <form onSubmit={handleScrape} className="flex gap-2 mb-10">
+          <input
+            type="url"
+            placeholder="Paste product URL…"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className={`${inputCls} flex-1`}
+          />
+          <button
+            type="submit"
+            disabled={scraping}
+            className="px-5 py-2 text-[12px] text-charcoal disabled:opacity-40 whitespace-nowrap"
+            style={{ backgroundColor: "#E8C8BE", borderRadius: 0 }}
+          >
+            {scraping ? "Analysing…" : "Analyse"}
+          </button>
+        </form>
+
+        {scrapeError && (
+          <p className="text-[12px] text-charcoal/50 mb-6">Error: {scrapeError}</p>
+        )}
+
+        {saved && (
+          <p className="text-[13px] mb-6" style={{ color: "#8FA68A" }}>
+            Saved to shop.
+          </p>
+        )}
+
+        {/* Editable preview card */}
+        {product && (
+          <div
+            className="flex flex-col gap-6"
+            style={{
+              background: "#F7F4EE",
+              border: "1px solid #C8BFB0",
+              borderRadius: "8px",
+              padding: "2rem",
+            }}
+          >
+            <Field label="Brand">
+              <input
+                className={inputCls}
+                value={product.brand}
+                onChange={(e) => setProduct({ ...product, brand: e.target.value })}
+              />
+            </Field>
+
+            <Field label="Product name">
+              <input
+                className={inputCls}
+                value={product.product_name}
+                onChange={(e) => setProduct({ ...product, product_name: e.target.value })}
+              />
+            </Field>
+
+            <Field label="Price (€)">
+              <input
+                type="number"
+                className={inputCls}
+                value={product.price}
+                onChange={(e) => updateProduct({ price: parseFloat(e.target.value) || 0 })}
+              />
+            </Field>
+
+            <Field label="Factory transparency">
+              <select
+                className={inputCls}
+                value={product.factory_transparency}
+                onChange={(e) => updateProduct({ factory_transparency: e.target.value as TransparencyValue })}
+              >
+                <option value="disclosed">Disclosed</option>
+                <option value="partial">Partial</option>
+                <option value="not-disclosed">Not disclosed</option>
+              </select>
+            </Field>
+
+            {/* Fibre rows */}
+            <Field label="Fibre composition">
+              <div className="flex flex-col gap-2">
+                {product.fibre_composition.map((row, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <select
+                      className={`${inputCls} flex-1`}
+                      value={row.fiber}
+                      onChange={(e) => updateFibreRow(i, "fiber", e.target.value)}
+                    >
+                      {FIBERS.map((f) => (
+                        <option key={f.value} value={f.value}>{f.label}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      className={`${inputCls} w-20`}
+                      value={row.pct}
+                      onChange={(e) => updateFibreRow(i, "pct", e.target.value)}
+                    />
+                    <span className="text-[12px] text-charcoal/40">%</span>
+                    <button
+                      onClick={() => removeFibreRow(i)}
+                      className="text-[11px] text-charcoal/30 hover:text-charcoal/60 px-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={addFibreRow}
+                  className="text-[11px] text-charcoal/40 hover:text-charcoal self-start mt-1"
+                >
+                  + Add fibre
+                </button>
+              </div>
+            </Field>
+
+            <Field label="Data completeness (%)">
+              <input
+                type="number"
+                className={inputCls}
+                value={product.data_completeness}
+                onChange={(e) => setProduct({ ...product, data_completeness: parseFloat(e.target.value) || 0 })}
+              />
+            </Field>
+
+            {/* Scores (read-only, auto-computed) */}
+            <div
+              className="grid grid-cols-2 gap-6 pt-4"
+              style={{ borderTop: "1px solid #EDE8DC" }}
+            >
+              <div>
+                <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-1">
+                  Breathability
+                </p>
+                <p
+                  className="font-display text-charcoal"
+                  style={{ fontSize: "2.8rem", fontWeight: 300, fontFamily: "var(--font-cormorant)" }}
+                >
+                  {product.breathability_score}
+                  <span className="text-[1rem] text-charcoal/30"> /10</span>
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-1">
+                  Clean score
+                </p>
+                <p
+                  className="font-display text-charcoal"
+                  style={{ fontSize: "2.8rem", fontWeight: 300, fontFamily: "var(--font-cormorant)" }}
+                >
+                  {product.clean_score}
+                  <span className="text-[1rem] text-charcoal/30"> /10</span>
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-1">
+                  Fair price range
+                </p>
+                <p className="text-[14px] text-charcoal">
+                  €{product.fair_price_low.toFixed(0)}–€{product.fair_price_high.toFixed(0)}
+                </p>
+              </div>
+            </div>
+
+            {/* Save */}
+            <div className="flex items-center gap-4 pt-2">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-6 py-2.5 text-[13px] text-charcoal disabled:opacity-40"
+                style={{ backgroundColor: "#E8C8BE", borderRadius: 0 }}
+              >
+                {saving ? "Saving…" : "Save to Shop"}
+              </button>
+              {saveError && (
+                <p className="text-[12px] text-charcoal/40">{saveError}</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
