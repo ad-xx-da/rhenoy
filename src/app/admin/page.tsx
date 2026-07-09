@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { calcScores, matchFiber, FIBERS, type TransparencyValue, type FiberRow } from "@/lib/score";
+import {
+  calcScores,
+  matchFiber,
+  FIBERS,
+  MANUFACTURING_OPTIONS,
+  type TransparencyValue,
+  type ManufacturingLocation,
+  type FiberRow,
+} from "@/lib/score";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,8 +28,10 @@ type EditableProduct = {
   product_name: string;
   fibre_composition: FiberRow[];
   price: number;
-  fair_price_low: number;
-  fair_price_high: number;
+  fair_price_low: number | null;
+  fair_price_high: number | null;
+  fair_price_spanning_countries: string[] | null;
+  manufacturing_location: ManufacturingLocation;
   breathability_score: number;
   clean_score: number;
   factory_transparency: TransparencyValue;
@@ -36,7 +46,8 @@ function buildEditable(url: string, raw: ScrapeResult, transparency: Transparenc
     pct: f.percentage ?? 0,
   }));
   const price = raw.price ?? 0;
-  const scores = calcScores(fibreRows, transparency, price);
+  const location: ManufacturingLocation = "not-disclosed";
+  const scores = calcScores(fibreRows, transparency, price, location);
   return {
     url,
     brand: raw.brand ?? "",
@@ -45,6 +56,8 @@ function buildEditable(url: string, raw: ScrapeResult, transparency: Transparenc
     price,
     fair_price_low: scores.fairPriceLow,
     fair_price_high: scores.fairPriceHigh,
+    fair_price_spanning_countries: scores.fairPriceSpanningCountries,
+    manufacturing_location: location,
     breathability_score: scores.breathability,
     clean_score: scores.clean,
     factory_transparency: transparency,
@@ -73,7 +86,6 @@ const inputCls =
 export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [authed, setAuthed] = useState(false);
-  const [authError, setAuthError] = useState(false);
 
   const [url, setUrl] = useState("");
   const [scraping, setScraping] = useState(false);
@@ -86,19 +98,9 @@ export default function AdminPage() {
 
   // ── Auth ──────────────────────────────────────────────────────────────────
 
-  async function handleAuth(e: React.FormEvent) {
+  function handleAuth(e: React.FormEvent) {
     e.preventDefault();
-    const res = await fetch("/api/products", {
-      headers: { "x-admin-password": password },
-    });
-    if (res.ok) {
-      setAuthed(true);
-      setAuthError(false);
-    } else {
-      // Just check against what the server returns on a GET — no real auth needed
-      // We'll validate on POST. For now accept anything and validate on save.
-      setAuthed(true);
-    }
+    if (password.trim()) setAuthed(true);
   }
 
   // ── Scrape ────────────────────────────────────────────────────────────────
@@ -127,18 +129,24 @@ export default function AdminPage() {
     }
   }
 
-  // ── Recompute scores when fibres/transparency/price change ────────────────
+  // ── Recompute scores ──────────────────────────────────────────────────────
 
   function updateProduct(patch: Partial<EditableProduct>) {
     if (!product) return;
     const next = { ...product, ...patch };
-    const scores = calcScores(next.fibre_composition, next.factory_transparency, next.price);
+    const scores = calcScores(
+      next.fibre_composition,
+      next.factory_transparency,
+      next.price,
+      next.manufacturing_location
+    );
     setProduct({
       ...next,
       breathability_score: scores.breathability,
       clean_score: scores.clean,
       fair_price_low: scores.fairPriceLow,
       fair_price_high: scores.fairPriceHigh,
+      fair_price_spanning_countries: scores.fairPriceSpanningCountries,
     });
   }
 
@@ -156,8 +164,7 @@ export default function AdminPage() {
 
   function removeFibreRow(i: number) {
     if (!product) return;
-    const rows = product.fibre_composition.filter((_, idx) => idx !== i);
-    updateProduct({ fibre_composition: rows });
+    updateProduct({ fibre_composition: product.fibre_composition.filter((_, idx) => idx !== i) });
   }
 
   // ── Save ──────────────────────────────────────────────────────────────────
@@ -216,9 +223,6 @@ export default function AdminPage() {
               Enter
             </button>
           </form>
-          {authError && (
-            <p className="text-[12px] text-charcoal/40 mt-3">Incorrect password.</p>
-          )}
         </div>
       </div>
     );
@@ -260,23 +264,15 @@ export default function AdminPage() {
         {scrapeError && (
           <p className="text-[12px] text-charcoal/50 mb-6">Error: {scrapeError}</p>
         )}
-
         {saved && (
-          <p className="text-[13px] mb-6" style={{ color: "#8FA68A" }}>
-            Saved to shop.
-          </p>
+          <p className="text-[13px] mb-6" style={{ color: "#8FA68A" }}>Saved to shop.</p>
         )}
 
         {/* Editable preview card */}
         {product && (
           <div
             className="flex flex-col gap-6"
-            style={{
-              background: "#F7F4EE",
-              border: "1px solid #C8BFB0",
-              borderRadius: "8px",
-              padding: "2rem",
-            }}
+            style={{ background: "#F7F4EE", border: "1px solid #C8BFB0", borderRadius: "8px", padding: "2rem" }}
           >
             <Field label="Brand">
               <input
@@ -301,6 +297,18 @@ export default function AdminPage() {
                 value={product.price}
                 onChange={(e) => updateProduct({ price: parseFloat(e.target.value) || 0 })}
               />
+            </Field>
+
+            <Field label="Manufacturing location">
+              <select
+                className={inputCls}
+                value={product.manufacturing_location}
+                onChange={(e) => updateProduct({ manufacturing_location: e.target.value as ManufacturingLocation })}
+              >
+                {MANUFACTURING_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
             </Field>
 
             <Field label="Factory transparency">
@@ -364,15 +372,13 @@ export default function AdminPage() {
               />
             </Field>
 
-            {/* Scores (read-only, auto-computed) */}
+            {/* Scores */}
             <div
               className="grid grid-cols-2 gap-6 pt-4"
               style={{ borderTop: "1px solid #EDE8DC" }}
             >
               <div>
-                <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-1">
-                  Breathability
-                </p>
+                <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-1">Breathability</p>
                 <p
                   className="font-display text-charcoal"
                   style={{ fontSize: "2.8rem", fontWeight: 300, fontFamily: "var(--font-cormorant)" }}
@@ -382,9 +388,7 @@ export default function AdminPage() {
                 </p>
               </div>
               <div>
-                <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-1">
-                  Clean score
-                </p>
+                <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-1">Clean score</p>
                 <p
                   className="font-display text-charcoal"
                   style={{ fontSize: "2.8rem", fontWeight: 300, fontFamily: "var(--font-cormorant)" }}
@@ -393,13 +397,24 @@ export default function AdminPage() {
                   <span className="text-[1rem] text-charcoal/30"> /10</span>
                 </p>
               </div>
-              <div>
-                <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-1">
-                  Fair price range
-                </p>
-                <p className="text-[14px] text-charcoal">
-                  €{product.fair_price_low.toFixed(0)}–€{product.fair_price_high.toFixed(0)}
-                </p>
+              <div className="col-span-2">
+                <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-1">Fair price range</p>
+                {product.fair_price_low == null ? (
+                  <p className="text-[13px] text-charcoal/50 italic">
+                    Unavailable — manufacturing location not disclosed
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-[14px] text-charcoal">
+                      €{product.fair_price_low}–€{product.fair_price_high}
+                    </p>
+                    {product.fair_price_spanning_countries && (
+                      <p className="text-[11px] text-charcoal/40 mt-1">
+                        Range reflects {product.fair_price_spanning_countries.join("–")} wage data; exact country not disclosed
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 

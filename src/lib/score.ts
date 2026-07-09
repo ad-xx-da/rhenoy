@@ -25,11 +25,84 @@ export interface FiberRow {
   pct: number; // 0–100
 }
 
+// ── Manufacturing location ────────────────────────────────────────────────────
+
+// Wage multiplier: how much of retail price should cover manufacturing costs.
+// Based on typical garment industry labour cost as % of retail (rough approximation).
+// Higher wage = higher fair floor and ceiling.
+export const COUNTRY_WAGE_DATA: Record<string, { label: string; multiplierLow: number; multiplierHigh: number }> = {
+  china:      { label: "China",      multiplierLow: 0.22, multiplierHigh: 0.33 },
+  vietnam:    { label: "Vietnam",    multiplierLow: 0.20, multiplierHigh: 0.30 },
+  indonesia:  { label: "Indonesia",  multiplierLow: 0.20, multiplierHigh: 0.30 },
+  india:      { label: "India",      multiplierLow: 0.20, multiplierHigh: 0.30 },
+  portugal:   { label: "Portugal",   multiplierLow: 0.30, multiplierHigh: 0.45 },
+  italy:      { label: "Italy",      multiplierLow: 0.38, multiplierHigh: 0.55 },
+  usa:        { label: "USA",        multiplierLow: 0.40, multiplierHigh: 0.58 },
+};
+
+export const REGION_COUNTRIES: Record<string, string[]> = {
+  "europe-unspecified": ["portugal", "italy"],
+  "asia-unspecified":   ["china", "vietnam", "indonesia", "india"],
+};
+
+export type ManufacturingLocation =
+  | keyof typeof COUNTRY_WAGE_DATA
+  | "europe-unspecified"
+  | "asia-unspecified"
+  | "not-disclosed";
+
+export const MANUFACTURING_OPTIONS: { value: ManufacturingLocation; label: string }[] = [
+  { value: "china",               label: "China" },
+  { value: "vietnam",             label: "Vietnam" },
+  { value: "indonesia",           label: "Indonesia" },
+  { value: "india",               label: "India" },
+  { value: "portugal",            label: "Portugal" },
+  { value: "italy",               label: "Italy" },
+  { value: "usa",                 label: "USA" },
+  { value: "europe-unspecified",  label: "Europe (unspecified)" },
+  { value: "asia-unspecified",    label: "Asia (unspecified)" },
+  { value: "not-disclosed",       label: "Not disclosed" },
+];
+
+export type FairPriceResult =
+  | { available: false; reason: "not-disclosed" }
+  | { available: true; low: number; high: number; spanningCountries: string[] | null };
+
+export function calcFairPrice(price: number, location: ManufacturingLocation): FairPriceResult {
+  if (location === "not-disclosed") {
+    return { available: false, reason: "not-disclosed" };
+  }
+
+  if (location in REGION_COUNTRIES) {
+    const countries = REGION_COUNTRIES[location];
+    const lows = countries.map((c) => price * COUNTRY_WAGE_DATA[c].multiplierLow);
+    const highs = countries.map((c) => price * COUNTRY_WAGE_DATA[c].multiplierHigh);
+    return {
+      available: true,
+      low: Math.round(Math.min(...lows)),
+      high: Math.round(Math.max(...highs)),
+      spanningCountries: countries.map((c) => COUNTRY_WAGE_DATA[c].label),
+    };
+  }
+
+  const country = COUNTRY_WAGE_DATA[location];
+  return {
+    available: true,
+    low: Math.round(price * country.multiplierLow),
+    high: Math.round(price * country.multiplierHigh),
+    spanningCountries: null,
+  };
+}
+
+// ── Breathability + clean scores ──────────────────────────────────────────────
+
 export interface Scores {
   breathability: number;
   clean: number;
-  fairPriceLow: number;
-  fairPriceHigh: number;
+  fairPriceLow: number | null;
+  fairPriceHigh: number | null;
+  fairPriceSpanningCountries: string[] | null;
+  fairPriceUnavailable: boolean;
 }
 
 function getFiberData(value: string) {
@@ -39,7 +112,8 @@ function getFiberData(value: string) {
 export function calcScores(
   rows: FiberRow[],
   transparency: TransparencyValue,
-  price: number
+  price: number,
+  location: ManufacturingLocation = "not-disclosed"
 ): Scores {
   const total = rows.reduce((s, r) => s + r.pct, 0);
   let breathability = 0;
@@ -55,11 +129,15 @@ export function calcScores(
   if (transparency === "disclosed") clean = Math.min(10, clean + 0.5);
   if (transparency === "not-disclosed") clean = Math.max(0, clean - 0.5);
 
+  const fp = calcFairPrice(price, location);
+
   return {
     breathability: Math.round(breathability * 10) / 10,
     clean: Math.round(clean * 10) / 10,
-    fairPriceLow: Math.round(price * 0.3 * 100) / 100,
-    fairPriceHigh: Math.round(price * 0.45 * 100) / 100,
+    fairPriceLow: fp.available ? fp.low : null,
+    fairPriceHigh: fp.available ? fp.high : null,
+    fairPriceSpanningCountries: fp.available ? fp.spanningCountries : null,
+    fairPriceUnavailable: !fp.available,
   };
 }
 
@@ -79,5 +157,5 @@ export function matchFiber(name: string): FiberValue {
   if (n.includes("merino")) return "wool-merino";
   if (n.includes("wool")) return "wool-generic";
   if (n.includes("elastane") || n.includes("spandex") || n.includes("lycra")) return "elastane";
-  return "cotton-conv"; // fallback
+  return "cotton-conv";
 }

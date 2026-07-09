@@ -16,6 +16,8 @@ interface DbProduct {
   price: number | null;
   fair_price_low: number | null;
   fair_price_high: number | null;
+  fair_price_spanning_countries: string[] | null;
+  manufacturing_location: string | null;
   breathability_score: number | null;
   clean_score: number | null;
   factory_transparency: string | null;
@@ -132,16 +134,23 @@ function ProductCard({ product: p }: { product: DbProduct }) {
           {materialLabel(p.fibre_composition)}
         </p>
 
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-baseline justify-between mb-2">
           <span className="text-[13px] text-charcoal">
             {p.price != null ? `€${p.price}` : "—"}
           </span>
-          {p.fair_price_low != null && p.fair_price_high != null && (
+          {p.fair_price_low != null && p.fair_price_high != null ? (
             <span className="text-[11px] text-charcoal/40">
               fair €{Math.round(p.fair_price_low)}–{Math.round(p.fair_price_high)}
             </span>
+          ) : (
+            <span className="text-[11px] text-charcoal/30 italic">fair range n/a</span>
           )}
         </div>
+        {p.fair_price_spanning_countries && p.fair_price_spanning_countries.length > 0 && (
+          <p className="text-[10px] text-charcoal/35 leading-snug">
+            Range reflects {p.fair_price_spanning_countries.join("–")} wage data; exact country not disclosed
+          </p>
+        )}
       </div>
 
       {/* CTA */}
