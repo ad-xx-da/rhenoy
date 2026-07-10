@@ -12,23 +12,37 @@ const SYSTEM_PROMPT =
   "garmentType (one of: top, pants, skirt, dress, outerwear, knitwear — pick the closest match based on the product name and description; null if genuinely unknown), " +
   "dataCompleteness (0–100). Set any unknown fields to null, never to 0 or empty string.";
 
-// Extract og:image or first large <img> src from raw HTML
-function extractImageFromHtml(html: string, baseUrl: string): string | null {
-  // Try og:image first — most reliable for product pages
+function normaliseImageUrl(url: string, pageOrigin: string): string {
+  if (url.startsWith("//")) return `https:${url}`;
+  if (url.startsWith("/")) return `${pageOrigin}${url}`;
+  if (url.startsWith("http://")) return url.replace("http://", "https://");
+  return url;
+}
+
+// Extract og:image or best available product image from raw HTML
+function extractImageFromHtml(html: string, pageUrl: string): string | null {
+  const origin = new URL(pageUrl).origin;
+
+  // og:image:secure_url is the canonical HTTPS version — prefer it
+  const ogSecureMatch = html.match(/<meta[^>]+property=["']og:image:secure_url["'][^>]+content=["']([^"']+)["']/i)
+    ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image:secure_url["']/i);
+  if (ogSecureMatch?.[1]) return normaliseImageUrl(ogSecureMatch[1], origin);
+
+  // og:image fallback
   const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
     ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-  if (ogMatch?.[1]) return ogMatch[1];
+  if (ogMatch?.[1]) return normaliseImageUrl(ogMatch[1], origin);
 
-  // Try twitter:image
+  // twitter:image
   const twitterMatch = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
     ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
-  if (twitterMatch?.[1]) return twitterMatch[1];
+  if (twitterMatch?.[1]) return normaliseImageUrl(twitterMatch[1], origin);
 
-  // Try JSON-LD image
+  // JSON-LD image
   const jsonLdMatch = html.match(/"image"\s*:\s*"(https?:\/\/[^"]+\.(jpg|jpeg|png|webp)[^"]*)"/i);
-  if (jsonLdMatch?.[1]) return jsonLdMatch[1];
+  if (jsonLdMatch?.[1]) return normaliseImageUrl(jsonLdMatch[1], origin);
 
-  // Try Shopify product image pattern
+  // Shopify CDN pattern
   const shopifyMatch = html.match(/cdn\.shopify\.com\/s\/files\/[^"'\s]+\.(jpg|jpeg|png|webp)/i);
   if (shopifyMatch?.[0]) return `https://${shopifyMatch[0]}`;
 
