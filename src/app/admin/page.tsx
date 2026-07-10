@@ -235,10 +235,33 @@ export default function AdminPage() {
     setSaving(true);
     setSaveError(null);
     try {
+      // If image_url is an external URL (not already Blob-hosted), upload it first
+      let finalProduct = product;
+      if (
+        product.image_url &&
+        !product.image_url.includes("vercel-storage.com") &&
+        !product.image_url.includes("blob.vercel")
+      ) {
+        try {
+          const uploadRes = await fetch("/api/upload-image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-admin-password": password },
+            body: JSON.stringify({ url: product.image_url }),
+          });
+          if (uploadRes.ok) {
+            const { url: blobUrl } = await uploadRes.json();
+            finalProduct = { ...product, image_url: blobUrl };
+            setProduct(finalProduct);
+          }
+        } catch {
+          // Non-fatal — save with original URL if upload fails
+        }
+      }
+
       const res = await fetch("/api/products", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": password },
-        body: JSON.stringify(product),
+        body: JSON.stringify(finalProduct),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
@@ -335,7 +358,7 @@ export default function AdminPage() {
             {/* Product image */}
             <Field label="Product image" missing={!product.image_url}>
               {product.image_url ? (
-                <div className="relative w-full aspect-[4/3] overflow-hidden" style={{ borderRadius: "4px" }}>
+                <div className="relative w-full aspect-[4/3] overflow-hidden mb-2" style={{ borderRadius: "4px" }}>
                   <Image
                     src={product.image_url}
                     alt=""
@@ -344,14 +367,14 @@ export default function AdminPage() {
                     unoptimized
                   />
                 </div>
-              ) : (
-                <div
-                  className="flex items-center justify-center text-[11px] text-charcoal/30 italic"
-                  style={{ height: "80px", border: "1px dashed #C8BFB0", borderRadius: "4px" }}
-                >
-                  No image scraped — add one manually after saving
-                </div>
-              )}
+              ) : null}
+              <input
+                type="url"
+                className={product.image_url ? inputCls : missingInputCls}
+                value={product.image_url ?? ""}
+                placeholder="Paste image URL manually if not auto-scraped"
+                onChange={(e) => setProduct({ ...product, image_url: e.target.value || null })}
+              />
             </Field>
 
             <Field label="Brand" missing={!product.brand}>

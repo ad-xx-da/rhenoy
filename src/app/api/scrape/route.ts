@@ -10,10 +10,10 @@ const SYSTEM_PROMPT =
   "Fields: productName, brand, fibres (array of objects with name and percentage — omit if unknown), price (number or null), currency (string or null), " +
   "countryOfOrigin (string or null), certifications (array of strings or null), treatments (array of strings or null), " +
   "garmentType (one of: top, pants, skirt, dress, outerwear, knitwear — pick the closest match based on the product name and description; null if genuinely unknown), " +
+  "imageUrl (the direct URL to the primary product/hero image — look for og:image or the main product photo; null if not found), " +
   "dataCompleteness (0–100). Set any unknown fields to null, never to 0 or empty string.";
 
 function normaliseImageUrl(url: string, pageOrigin: string): string {
-  // Decode HTML entities that appear in attribute values
   const decoded = url.replace(/&amp;/g, "&").replace(/&quot;/g, '"');
   if (decoded.startsWith("//")) return `https:${decoded}`;
   if (decoded.startsWith("/")) return `${pageOrigin}${decoded}`;
@@ -21,37 +21,31 @@ function normaliseImageUrl(url: string, pageOrigin: string): string {
   return decoded;
 }
 
-// Extract og:image or best available product image from raw HTML
 function extractImageFromHtml(html: string, pageUrl: string): string | null {
   const origin = new URL(pageUrl).origin;
 
-  // og:image:secure_url is the canonical HTTPS version — prefer it
   const ogSecureMatch = html.match(/<meta[^>]+property=["']og:image:secure_url["'][^>]+content=["']([^"']+)["']/i)
     ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image:secure_url["']/i);
   if (ogSecureMatch?.[1]) return normaliseImageUrl(ogSecureMatch[1], origin);
 
-  // og:image fallback
   const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
     ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
   if (ogMatch?.[1]) return normaliseImageUrl(ogMatch[1], origin);
 
-  // twitter:image
   const twitterMatch = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
     ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
   if (twitterMatch?.[1]) return normaliseImageUrl(twitterMatch[1], origin);
 
-  // JSON-LD image
   const jsonLdMatch = html.match(/"image"\s*:\s*"(https?:\/\/[^"]+\.(jpg|jpeg|png|webp)[^"]*)"/i);
   if (jsonLdMatch?.[1]) return normaliseImageUrl(jsonLdMatch[1], origin);
 
-  // Shopify CDN pattern
   const shopifyMatch = html.match(/cdn\.shopify\.com\/s\/files\/[^"'\s]+\.(jpg|jpeg|png|webp)/i);
   if (shopifyMatch?.[0]) return `https://${shopifyMatch[0]}`;
 
   return null;
 }
 
-async function fetchImageUrl(productUrl: string): Promise<string | null> {
+async function fetchImageUrlFromPage(productUrl: string): Promise<string | null> {
   try {
     const res = await fetch(productUrl, {
       headers: {
@@ -67,7 +61,7 @@ async function fetchImageUrl(productUrl: string): Promise<string | null> {
     }
     const html = await res.text();
     const imageUrl = extractImageFromHtml(html, productUrl);
-    console.log("[scrape] Extracted image URL from HTML:", imageUrl);
+    console.log("[scrape] HTML image extraction result:", imageUrl ?? "none");
     return imageUrl;
   } catch (err) {
     console.warn("[scrape] Page fetch error:", err instanceof Error ? err.message : err);
@@ -77,7 +71,6 @@ async function fetchImageUrl(productUrl: string): Promise<string | null> {
 
 async function uploadImageToBlob(imageUrl: string): Promise<string | null> {
   try {
-    // Make sure URL is absolute
     const url = imageUrl.startsWith("//") ? `https:${imageUrl}` : imageUrl;
     const imgRes = await fetch(url, {
       headers: {
@@ -111,8 +104,8 @@ export async function POST(req: NextRequest) {
 
   console.log("[scrape] Requesting URL:", url);
 
-  // Run Claude data extraction and page HTML fetch in parallel
-  const [claudeResponse, imageUrl] = await Promise.all([
+  // Run Claude extraction and direct page fetch in parallel
+  const [claudeResponse, htmlImageUrl] = await Promise.all([
     client.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,
@@ -123,14 +116,12 @@ export async function POST(req: NextRequest) {
       console.error("[scrape] Claude error:", err instanceof Error ? err.message : err);
       return null;
     }),
-    fetchImageUrl(url),
+    fetchImageUrlFromPage(url),
   ]);
 
   if (!claudeResponse) {
     return NextResponse.json({ error: "Failed to extract product data" }, { status: 500 });
   }
-
-  console.log("[scrape] Stop reason:", claudeResponse.stop_reason);
 
   const textBlock = claudeResponse.content.find((b) => b.type === "text");
   if (!textBlock || textBlock.type !== "text") {
@@ -141,7 +132,7 @@ export async function POST(req: NextRequest) {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start === -1 || end === -1) {
-    console.error("[scrape] No JSON found in response:", text.slice(0, 300));
+    console.error("[scrape] No JSON found:", text.slice(0, 300));
     return NextResponse.json({ error: "Model did not return JSON" }, { status: 500 });
   }
 
@@ -153,8 +144,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Failed to parse model response as JSON" }, { status: 500 });
   }
 
-  // Upload image to Blob if we found one
-  const hostedImageUrl = imageUrl ? await uploadImageToBlob(imageUrl) : null;
+  // Prefer direct HTML extraction; fall back to what Claude found
+  const claudeImageUrl = typeof data.imageUrl === "string" ? data.imageUrl : null;
+  const bestImageUrl = htmlImageUrl ?? claudeImageUrl;
+  console.log("[scrape] Image sources — HTML:", htmlImageUrl, "Claude:", claudeImageUrl, "Using:", bestImageUrl);
+
+  const hostedImageUrl = bestImageUrl
+    ? await uploadImageToBlob(normaliseImageUrl(bestImageUrl, new URL(url).origin))
+    : null;
 
   return NextResponse.json({ ...data, hostedImageUrl });
 }
