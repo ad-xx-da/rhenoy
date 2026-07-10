@@ -9,6 +9,7 @@ const SYSTEM_PROMPT =
   "Respond with ONLY valid JSON. No preamble, no explanation, no markdown code fences, no commentary — just the raw JSON object itself, starting with { and ending with }. " +
   "Fields: productName, brand, fibres (array of objects with name and percentage — omit if unknown), price (number or null), currency (string or null), " +
   "countryOfOrigin (string or null), certifications (array of strings or null), treatments (array of strings or null), " +
+  "garmentType (one of: top, pants, skirt, dress, outerwear, knitwear — pick the closest match based on the product name and description; null if genuinely unknown), " +
   "dataCompleteness (0–100). Set any unknown fields to null, never to 0 or empty string.";
 
 // Extract og:image or first large <img> src from raw HTML

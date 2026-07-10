@@ -23,6 +23,7 @@ type ScrapeResult = {
   price: number | null;
   currency: string | null;
   dataCompleteness: number | null;
+  garmentType: string | null;
   imageUrl: string | null;
   hostedImageUrl: string | null;
 };
@@ -34,7 +35,7 @@ type EditableProduct = {
   fibre_composition: FiberRow[];
   // null means "not yet filled in — needs manual review"
   price: number | null;
-  garment_type: GarmentType;
+  garment_type: GarmentType | null;
   fair_price_low: number | null;
   fair_price_high: number | null;
   fair_price_spanning_countries: string[] | null;
@@ -58,7 +59,7 @@ function tryCalcScores(p: EditableProduct): Pick<
     p.fibre_composition.every((r) => r.pct > 0) &&
     p.fibre_composition.reduce((s, r) => s + r.pct, 0) > 0;
 
-  if (!fibresReady) {
+  if (!fibresReady || !p.garment_type) {
     return {
       breathability_score: null,
       clean_score: null,
@@ -71,7 +72,7 @@ function tryCalcScores(p: EditableProduct): Pick<
   const scores = calcScores(
     p.fibre_composition,
     p.factory_transparency,
-    p.garment_type,
+    p.garment_type as GarmentType,
     p.manufacturing_location
   );
 
@@ -87,6 +88,22 @@ function tryCalcScores(p: EditableProduct): Pick<
 
 // ── Build form state from scrape result ───────────────────────────────────────
 
+const GARMENT_TYPE_MAP: Record<string, GarmentType> = {
+  top: "top", shirt: "top", blouse: "top", tshirt: "top", "t-shirt": "top",
+  halter: "top", neckholder: "top", crop: "top",
+  pants: "pants", shorts: "pants", trousers: "pants", jeans: "pants",
+  skirt: "skirt",
+  dress: "dress", jumpsuit: "dress", romper: "dress",
+  outerwear: "outerwear", jacket: "outerwear", coat: "outerwear", blazer: "outerwear",
+  knitwear: "knitwear", sweater: "knitwear", knit: "knitwear", cardigan: "knitwear",
+};
+
+function matchGarmentType(raw: string | null): GarmentType | null {
+  if (!raw) return null;
+  const key = raw.toLowerCase().trim();
+  return GARMENT_TYPE_MAP[key] ?? null;
+}
+
 function buildEditable(url: string, raw: ScrapeResult): EditableProduct {
   const fibreRows: FiberRow[] = (raw.fibres ?? []).map((f) => ({
     fiber: matchFiber(f.name),
@@ -100,7 +117,7 @@ function buildEditable(url: string, raw: ScrapeResult): EditableProduct {
     product_name: raw.productName ?? "",
     fibre_composition: fibreRows,
     price: raw.price ?? null,           // null = scraper didn't find it
-    garment_type: "dress",
+    garment_type: matchGarmentType(raw.garmentType),
     fair_price_low: null,
     fair_price_high: null,
     fair_price_spanning_countries: null,
@@ -272,6 +289,7 @@ export default function AdminPage() {
   // ── Main form ─────────────────────────────────────────────────────────────
 
   const scoresReady = product?.breathability_score != null;
+        const garmentMissing = !product?.garment_type;
   const fibresTotal = product?.fibre_composition.reduce((s, r) => s + r.pct, 0) ?? 0;
   const fibresMissing = !product || product.fibre_composition.length === 0 || fibresTotal === 0;
 
@@ -367,12 +385,13 @@ export default function AdminPage() {
               />
             </Field>
 
-            <Field label="Garment type">
+            <Field label="Garment type" missing={!product.garment_type}>
               <select
-                className={inputCls}
-                value={product.garment_type}
-                onChange={(e) => updateProduct({ garment_type: e.target.value as GarmentType })}
+                className={product.garment_type ? inputCls : missingInputCls}
+                value={product.garment_type ?? ""}
+                onChange={(e) => updateProduct({ garment_type: e.target.value as GarmentType || null })}
               >
+                <option value="" disabled>Select garment type…</option>
                 {GARMENT_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
@@ -513,8 +532,9 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || garmentMissing}
                 className="px-6 py-2.5 text-[13px] text-charcoal disabled:opacity-40"
+                title={garmentMissing ? "Select a garment type first" : undefined}
                 style={{ backgroundColor: "#E8C8BE", borderRadius: 0 }}
               >
                 {saving ? "Saving…" : "Save to Shop"}
