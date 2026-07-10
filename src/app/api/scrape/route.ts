@@ -4,7 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 const client = new Anthropic();
 
 const SYSTEM_PROMPT =
-  "You are a product data extraction tool. When given a URL, use web search to find the product and extract its material composition, price, certifications, and treatments. Respond only in JSON with these fields: productName, brand, fibres (array of objects with name and percentage), price, currency, countryOfOrigin, certifications (array of strings), treatments (array of strings), dataCompleteness (a number from 0 to 100 representing how complete the data is based on how many fields were found). If a field is not found set it to null. Never include markdown or explanation, only raw JSON.";
+  "You are a product data extraction tool. When given a URL, use web search to find the product and extract its material composition, price, certifications, and treatments. " +
+  "Respond with ONLY valid JSON. No preamble, no explanation, no markdown code fences, no commentary — just the raw JSON object itself, starting with { and ending with }. " +
+  "Fields: productName, brand, fibres (array of objects with name and percentage), price, currency, countryOfOrigin, certifications (array of strings), treatments (array of strings), dataCompleteness (0–100). Set unknown fields to null.";
 
 export async function POST(req: NextRequest) {
   const { url } = await req.json();
@@ -41,9 +43,16 @@ export async function POST(req: NextRequest) {
 
     console.log("[scrape] Raw text:", textBlock.text.slice(0, 200));
 
-    // Strip any accidental markdown fences
-    const raw = textBlock.text.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
-    const data = JSON.parse(raw);
+    // Extract JSON robustly: find the first { and last } in the response,
+    // discarding any preamble, explanation, or markdown fences the model adds.
+    const text = textBlock.text;
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end === -1) {
+      console.error("[scrape] No JSON object found in response:", text.slice(0, 300));
+      return NextResponse.json({ error: "Model did not return JSON" }, { status: 500 });
+    }
+    const data = JSON.parse(text.slice(start, end + 1));
     return NextResponse.json(data);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
