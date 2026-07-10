@@ -162,7 +162,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               {p.manufacturing_location && (
                 <p className="text-[12px] text-charcoal/50">
                   <span className="text-[10px] tracking-widest uppercase text-charcoal/30 mr-2">Made in</span>
-                  {p.manufacturing_location}
+                  {p.manufacturing_location === "not-disclosed" ? "Not disclosed" : p.manufacturing_location}
                 </p>
               )}
               {p.factory_transparency && (
