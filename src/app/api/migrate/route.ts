@@ -27,11 +27,12 @@ export async function POST(req: NextRequest) {
     )
   `;
 
-  // Add column if table already existed without it
+  // Add columns if table already existed without them
   await sql`
     ALTER TABLE products
       ADD COLUMN IF NOT EXISTS fair_price_spanning_countries TEXT[],
-      ADD COLUMN IF NOT EXISTS manufacturing_location TEXT
+      ADD COLUMN IF NOT EXISTS manufacturing_location TEXT,
+      ADD COLUMN IF NOT EXISTS garment_type TEXT
   `;
 
   return NextResponse.json({ ok: true });

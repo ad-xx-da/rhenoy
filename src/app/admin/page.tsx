@@ -5,9 +5,11 @@ import {
   calcScores,
   matchFiber,
   FIBERS,
+  GARMENT_OPTIONS,
   MANUFACTURING_OPTIONS,
   type TransparencyValue,
   type ManufacturingLocation,
+  type GarmentType,
   type FiberRow,
 } from "@/lib/score";
 
@@ -28,6 +30,7 @@ type EditableProduct = {
   product_name: string;
   fibre_composition: FiberRow[];
   price: number;
+  garment_type: GarmentType;
   fair_price_low: number | null;
   fair_price_high: number | null;
   fair_price_spanning_countries: string[] | null;
@@ -40,20 +43,22 @@ type EditableProduct = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildEditable(url: string, raw: ScrapeResult, transparency: TransparencyValue): EditableProduct {
+function buildEditable(url: string, raw: ScrapeResult): EditableProduct {
   const fibreRows: FiberRow[] = (raw.fibres ?? []).map((f) => ({
     fiber: matchFiber(f.name),
     pct: f.percentage ?? 0,
   }));
-  const price = raw.price ?? 0;
+  const garmentType: GarmentType = "dress";
   const location: ManufacturingLocation = "not-disclosed";
-  const scores = calcScores(fibreRows, transparency, price, location);
+  const transparency: TransparencyValue = "partial";
+  const scores = calcScores(fibreRows, transparency, garmentType, location);
   return {
     url,
     brand: raw.brand ?? "",
     product_name: raw.productName ?? "",
     fibre_composition: fibreRows,
-    price,
+    price: raw.price ?? 0,
+    garment_type: garmentType,
     fair_price_low: scores.fairPriceLow,
     fair_price_high: scores.fairPriceHigh,
     fair_price_spanning_countries: scores.fairPriceSpanningCountries,
@@ -96,14 +101,10 @@ export default function AdminPage() {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
-
   function handleAuth(e: React.FormEvent) {
     e.preventDefault();
     if (password.trim()) setAuthed(true);
   }
-
-  // ── Scrape ────────────────────────────────────────────────────────────────
 
   async function handleScrape(e: React.FormEvent) {
     e.preventDefault();
@@ -112,7 +113,6 @@ export default function AdminPage() {
     setScrapeError(null);
     setProduct(null);
     setSaved(false);
-
     try {
       const res = await fetch("/api/scrape", {
         method: "POST",
@@ -121,7 +121,7 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail ?? data.error ?? "Scrape failed");
-      setProduct(buildEditable(url.trim(), data, "partial"));
+      setProduct(buildEditable(url.trim(), data));
     } catch (err) {
       setScrapeError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -129,15 +129,14 @@ export default function AdminPage() {
     }
   }
 
-  // ── Recompute scores ──────────────────────────────────────────────────────
-
+  // Recompute scores whenever any input changes
   function updateProduct(patch: Partial<EditableProduct>) {
     if (!product) return;
     const next = { ...product, ...patch };
     const scores = calcScores(
       next.fibre_composition,
       next.factory_transparency,
-      next.price,
+      next.garment_type,
       next.manufacturing_location
     );
     setProduct({
@@ -167,8 +166,6 @@ export default function AdminPage() {
     updateProduct({ fibre_composition: product.fibre_composition.filter((_, idx) => idx !== i) });
   }
 
-  // ── Save ──────────────────────────────────────────────────────────────────
-
   async function handleSave() {
     if (!product) return;
     setSaving(true);
@@ -176,10 +173,7 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/products", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-admin-password": password,
-        },
+        headers: { "Content-Type": "application/json", "x-admin-password": password },
         body: JSON.stringify(product),
       });
       const data = await res.json();
@@ -194,7 +188,7 @@ export default function AdminPage() {
     }
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Auth gate ─────────────────────────────────────────────────────────────
 
   if (!authed) {
     return (
@@ -228,10 +222,11 @@ export default function AdminPage() {
     );
   }
 
+  // ── Main form ─────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen bg-cream px-6 sm:px-10 pt-24 pb-20">
       <div className="max-w-2xl mx-auto">
-        {/* Header */}
         <div className="mb-10" style={{ borderBottom: "1px solid #EDE8DC", paddingBottom: "1.5rem" }}>
           <p className="text-[10px] tracking-[0.3em] uppercase text-charcoal/40 mb-1">Admin</p>
           <h1
@@ -242,7 +237,6 @@ export default function AdminPage() {
           </h1>
         </div>
 
-        {/* URL input */}
         <form onSubmit={handleScrape} className="flex gap-2 mb-10">
           <input
             type="url"
@@ -261,14 +255,9 @@ export default function AdminPage() {
           </button>
         </form>
 
-        {scrapeError && (
-          <p className="text-[12px] text-charcoal/50 mb-6">Error: {scrapeError}</p>
-        )}
-        {saved && (
-          <p className="text-[13px] mb-6" style={{ color: "#8FA68A" }}>Saved to shop.</p>
-        )}
+        {scrapeError && <p className="text-[12px] text-charcoal/50 mb-6">Error: {scrapeError}</p>}
+        {saved && <p className="text-[13px] mb-6" style={{ color: "#8FA68A" }}>Saved to shop.</p>}
 
-        {/* Editable preview card */}
         {product && (
           <div
             className="flex flex-col gap-6"
@@ -299,6 +288,18 @@ export default function AdminPage() {
               />
             </Field>
 
+            <Field label="Garment type">
+              <select
+                className={inputCls}
+                value={product.garment_type}
+                onChange={(e) => updateProduct({ garment_type: e.target.value as GarmentType })}
+              >
+                {GARMENT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </Field>
+
             <Field label="Manufacturing location">
               <select
                 className={inputCls}
@@ -323,7 +324,6 @@ export default function AdminPage() {
               </select>
             </Field>
 
-            {/* Fibre rows */}
             <Field label="Fibre composition">
               <div className="flex flex-col gap-2">
                 {product.fibre_composition.map((row, i) => (
@@ -347,6 +347,7 @@ export default function AdminPage() {
                     />
                     <span className="text-[12px] text-charcoal/40">%</span>
                     <button
+                      type="button"
                       onClick={() => removeFibreRow(i)}
                       className="text-[11px] text-charcoal/30 hover:text-charcoal/60 px-1"
                     >
@@ -355,6 +356,7 @@ export default function AdminPage() {
                   </div>
                 ))}
                 <button
+                  type="button"
                   onClick={addFibreRow}
                   className="text-[11px] text-charcoal/40 hover:text-charcoal self-start mt-1"
                 >
@@ -372,29 +374,18 @@ export default function AdminPage() {
               />
             </Field>
 
-            {/* Scores */}
-            <div
-              className="grid grid-cols-2 gap-6 pt-4"
-              style={{ borderTop: "1px solid #EDE8DC" }}
-            >
+            {/* Computed scores — read only */}
+            <div className="grid grid-cols-2 gap-6 pt-4" style={{ borderTop: "1px solid #EDE8DC" }}>
               <div>
                 <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-1">Breathability</p>
-                <p
-                  className="font-display text-charcoal"
-                  style={{ fontSize: "2.8rem", fontWeight: 300, fontFamily: "var(--font-cormorant)" }}
-                >
-                  {product.breathability_score}
-                  <span className="text-[1rem] text-charcoal/30"> /10</span>
+                <p className="font-display text-charcoal" style={{ fontSize: "2.8rem", fontWeight: 300, fontFamily: "var(--font-cormorant)" }}>
+                  {product.breathability_score}<span className="text-[1rem] text-charcoal/30"> /10</span>
                 </p>
               </div>
               <div>
                 <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-1">Clean score</p>
-                <p
-                  className="font-display text-charcoal"
-                  style={{ fontSize: "2.8rem", fontWeight: 300, fontFamily: "var(--font-cormorant)" }}
-                >
-                  {product.clean_score}
-                  <span className="text-[1rem] text-charcoal/30"> /10</span>
+                <p className="font-display text-charcoal" style={{ fontSize: "2.8rem", fontWeight: 300, fontFamily: "var(--font-cormorant)" }}>
+                  {product.clean_score}<span className="text-[1rem] text-charcoal/30"> /10</span>
                 </p>
               </div>
               <div className="col-span-2">
@@ -406,7 +397,7 @@ export default function AdminPage() {
                 ) : (
                   <>
                     <p className="text-[14px] text-charcoal">
-                      €{product.fair_price_low}–€{product.fair_price_high}
+                      €{product.fair_price_low} – €{product.fair_price_high}
                     </p>
                     {product.fair_price_spanning_countries && (
                       <p className="text-[11px] text-charcoal/40 mt-1">
@@ -418,9 +409,9 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Save */}
             <div className="flex items-center gap-4 pt-2">
               <button
+                type="button"
                 onClick={handleSave}
                 disabled={saving}
                 className="px-6 py-2.5 text-[13px] text-charcoal disabled:opacity-40"
@@ -428,9 +419,7 @@ export default function AdminPage() {
               >
                 {saving ? "Saving…" : "Save to Shop"}
               </button>
-              {saveError && (
-                <p className="text-[12px] text-charcoal/40">{saveError}</p>
-              )}
+              {saveError && <p className="text-[12px] text-charcoal/40">{saveError}</p>}
             </div>
           </div>
         )}

@@ -18,6 +18,7 @@ interface DbProduct {
   fair_price_high: number | null;
   fair_price_spanning_countries: string[] | null;
   manufacturing_location: string | null;
+  garment_type: string | null;
   breathability_score: number | null;
   clean_score: number | null;
   factory_transparency: string | null;

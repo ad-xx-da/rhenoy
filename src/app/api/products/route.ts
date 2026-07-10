@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
     fair_price_high,
     fair_price_spanning_countries,
     manufacturing_location,
+    garment_type,
     breathability_score,
     clean_score,
     factory_transparency,
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
     INSERT INTO products (
       url, brand, product_name, fibre_composition, price,
       fair_price_low, fair_price_high, fair_price_spanning_countries,
-      manufacturing_location,
+      manufacturing_location, garment_type,
       breathability_score, clean_score,
       factory_transparency, data_completeness
     ) VALUES (
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
       ${JSON.stringify(fibre_composition)},
       ${price}, ${fair_price_low ?? null}, ${fair_price_high ?? null},
       ${fair_price_spanning_countries ?? null},
-      ${manufacturing_location},
+      ${manufacturing_location}, ${garment_type ?? null},
       ${breathability_score}, ${clean_score},
       ${factory_transparency}, ${data_completeness}
     )
