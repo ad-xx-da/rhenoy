@@ -43,7 +43,16 @@ async function getProducts(): Promise<DbProduct[]> {
 
 function materialLabel(fibres: { fiber: string; pct: number }[] | null): string {
   if (!fibres || fibres.length === 0) return "—";
-  return fibres.map((f) => `${f.pct}% ${f.fiber.replace(/-/g, " ")}`).join(", ");
+  return fibres
+    .map((f) => {
+      const name = f.fiber
+        .replace(/-/g, " ")
+        .replace(/\b(unknown|generic|unspecified)\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      return `${f.pct}% ${name}`;
+    })
+    .join(", ");
 }
 
 export default async function ShopPage() {
@@ -100,9 +109,7 @@ function ScorePill({ label, value }: { label: string; value: number | null }) {
 function ProductCard({ product: p }: { product: DbProduct }) {
   return (
     <Link
-      href={p.url}
-      target="_blank"
-      rel="noopener noreferrer"
+      href={`/shop/${p.id}`}
       className="group block"
       style={{ border: "1px solid #EDE8DC", background: "#F7F4EE" }}
     >
@@ -172,7 +179,7 @@ function ProductCard({ product: p }: { product: DbProduct }) {
         className="px-4 py-3 text-[11px] text-charcoal/50 group-hover:text-charcoal transition-colors"
         style={{ borderTop: "1px solid #EDE8DC" }}
       >
-        View product →
+        See scores →
       </div>
     </Link>
   );
