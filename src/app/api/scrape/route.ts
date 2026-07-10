@@ -13,10 +13,12 @@ const SYSTEM_PROMPT =
   "dataCompleteness (0–100). Set any unknown fields to null, never to 0 or empty string.";
 
 function normaliseImageUrl(url: string, pageOrigin: string): string {
-  if (url.startsWith("//")) return `https:${url}`;
-  if (url.startsWith("/")) return `${pageOrigin}${url}`;
-  if (url.startsWith("http://")) return url.replace("http://", "https://");
-  return url;
+  // Decode HTML entities that appear in attribute values
+  const decoded = url.replace(/&amp;/g, "&").replace(/&quot;/g, '"');
+  if (decoded.startsWith("//")) return `https:${decoded}`;
+  if (decoded.startsWith("/")) return `${pageOrigin}${decoded}`;
+  if (decoded.startsWith("http://")) return decoded.replace("http://", "https://");
+  return decoded;
 }
 
 // Extract og:image or best available product image from raw HTML
