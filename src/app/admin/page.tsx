@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import {
   calcScores,
@@ -164,6 +164,16 @@ const inputCls =
 const missingInputCls =
   "w-full bg-cream border text-charcoal text-[13px] px-3 py-2 focus:outline-none transition-colors border-[#E8C8BE]";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type Submission = {
+  id: number;
+  url: string;
+  note: string | null;
+  status: "pending" | "reviewed" | "dismissed";
+  created_at: string;
+};
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -178,6 +188,36 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+
+  const loadSubmissions = useCallback(async (pw: string) => {
+    try {
+      const res = await fetch("/api/submissions", {
+        headers: { "x-admin-password": pw },
+      });
+      if (res.ok) setSubmissions(await res.json());
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (authed) loadSubmissions(password);
+  }, [authed, password, loadSubmissions]);
+
+  async function handleSubmissionStatus(id: number, status: "reviewed" | "dismissed") {
+    await fetch(`/api/submissions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({ status }),
+    });
+    setSubmissions((prev) => prev.map((s) => s.id === id ? { ...s, status } : s));
+  }
+
+  function useSubmissionUrl(submissionUrl: string, id: number) {
+    setUrl(submissionUrl);
+    handleSubmissionStatus(id, "reviewed");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   function handleAuth(e: React.FormEvent) {
     e.preventDefault();
@@ -349,6 +389,69 @@ export default function AdminPage() {
 
         {scrapeError && <p className="text-[12px] text-charcoal/50 mb-6">Error: {scrapeError}</p>}
         {saved && <p className="text-[13px] mb-6" style={{ color: "#8FA68A" }}>Saved to shop.</p>}
+
+        {/* Submissions queue */}
+        {(() => {
+          const pending = submissions.filter((s) => s.status === "pending");
+          if (submissions.length === 0) return null;
+          return (
+            <div className="mt-16" style={{ borderTop: "1px solid #EDE8DC", paddingTop: "2rem" }}>
+              <p className="text-[10px] tracking-[0.3em] uppercase text-charcoal/40 mb-1">Submissions</p>
+              <h2
+                className="font-display italic text-charcoal mb-6"
+                style={{ fontSize: "1.5rem", fontWeight: 300, fontFamily: "var(--font-cormorant)" }}
+              >
+                {pending.length > 0 ? `${pending.length} pending` : "All caught up."}
+              </h2>
+              <div className="flex flex-col gap-3">
+                {submissions.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex flex-col gap-2 px-4 py-4"
+                    style={{
+                      border: "1px solid #EDE8DC",
+                      background: s.status === "pending" ? "#F7F4EE" : "transparent",
+                      opacity: s.status !== "pending" ? 0.4 : 1,
+                    }}
+                  >
+                    <p className="text-[12px] text-charcoal break-all">{s.url}</p>
+                    {s.note && (
+                      <p className="text-[11px] text-charcoal/50 italic">{s.note}</p>
+                    )}
+                    <div className="flex items-center gap-3 mt-1">
+                      {s.status === "pending" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => useSubmissionUrl(s.url, s.id)}
+                            className="text-[11px] tracking-widest uppercase text-charcoal px-4 py-1.5"
+                            style={{ backgroundColor: "#E8C8BE", borderRadius: 0 }}
+                          >
+                            Use URL
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSubmissionStatus(s.id, "dismissed")}
+                            className="text-[11px] tracking-widest uppercase text-charcoal/40 hover:text-charcoal/70 transition-colors"
+                          >
+                            Dismiss
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-[10px] tracking-widest uppercase text-charcoal/30">
+                          {s.status}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-charcoal/25 ml-auto">
+                        {new Date(s.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {product && (
           <div
