@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
     ALTER TABLE products
       ADD COLUMN IF NOT EXISTS fair_price_spanning_countries TEXT[],
       ADD COLUMN IF NOT EXISTS manufacturing_location TEXT,
-      ADD COLUMN IF NOT EXISTS garment_type TEXT
+      ADD COLUMN IF NOT EXISTS garment_type TEXT,
+      ADD COLUMN IF NOT EXISTS image_url TEXT
   `;
 
   return NextResponse.json({ ok: true });

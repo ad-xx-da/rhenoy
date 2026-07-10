@@ -1,4 +1,5 @@
 import EmailCapture from "@/components/EmailCapture";
+import Image from "next/image";
 import Link from "next/link";
 
 export const metadata = {
@@ -19,6 +20,7 @@ interface DbProduct {
   fair_price_spanning_countries: string[] | null;
   manufacturing_location: string | null;
   garment_type: string | null;
+  image_url: string | null;
   breathability_score: number | null;
   clean_score: number | null;
   factory_transparency: string | null;
@@ -28,10 +30,9 @@ interface DbProduct {
 
 async function getProducts(): Promise<DbProduct[]> {
   try {
-    const baseUrl =
-      process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3000";
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000";
     const res = await fetch(`${baseUrl}/api/products`, { cache: "no-store" });
     if (!res.ok) return [];
     return res.json();
@@ -42,9 +43,7 @@ async function getProducts(): Promise<DbProduct[]> {
 
 function materialLabel(fibres: { fiber: string; pct: number }[] | null): string {
   if (!fibres || fibres.length === 0) return "—";
-  return fibres
-    .map((f) => `${f.pct}% ${f.fiber.replace(/-/g, " ")}`)
-    .join(", ");
+  return fibres.map((f) => `${f.pct}% ${f.fiber.replace(/-/g, " ")}`).join(", ");
 }
 
 export default async function ShopPage() {
@@ -88,14 +87,12 @@ export default async function ShopPage() {
 
 function ScorePill({ label, value }: { label: string; value: number | null }) {
   return (
-    <span
-      className="inline-flex items-center gap-1 text-[11px] text-charcoal/60"
-    >
+    <span className="inline-flex items-center gap-1">
       <span className="text-[10px] tracking-widest uppercase text-charcoal/40">{label}</span>
-      <span className="font-display text-charcoal" style={{ fontFamily: "var(--font-cormorant)", fontSize: "1.1rem" }}>
+      <span className="font-display text-cream" style={{ fontFamily: "var(--font-cormorant)", fontSize: "1.1rem" }}>
         {value ?? "—"}
       </span>
-      <span className="text-charcoal/30 text-[10px]">/10</span>
+      <span className="text-cream/30 text-[10px]">/10</span>
     </span>
   );
 }
@@ -109,13 +106,31 @@ function ProductCard({ product: p }: { product: DbProduct }) {
       className="group block"
       style={{ border: "1px solid #EDE8DC", background: "#F7F4EE" }}
     >
+      {/* Product image */}
+      {p.image_url ? (
+        <div className="relative w-full aspect-[4/3] overflow-hidden">
+          <Image
+            src={p.image_url}
+            alt={p.product_name ?? ""}
+            fill
+            className="object-cover group-hover:scale-[1.02] transition-transform duration-500"
+            unoptimized
+          />
+        </div>
+      ) : (
+        <div
+          className="w-full aspect-[4/3]"
+          style={{ backgroundColor: "#EDE8DC" }}
+        />
+      )}
+
       {/* Score strip */}
       <div
         className="flex items-center gap-4 px-4 py-3"
-        style={{ borderBottom: "1px solid #EDE8DC", backgroundColor: "#2C2B27" }}
+        style={{ backgroundColor: "#2C2B27" }}
       >
         <ScorePill label="Breath." value={p.breathability_score} />
-        <span className="text-charcoal/20 text-[10px]">|</span>
+        <span className="text-white/20 text-[10px]">|</span>
         <ScorePill label="Clean" value={p.clean_score} />
       </div>
 
@@ -130,11 +145,9 @@ function ProductCard({ product: p }: { product: DbProduct }) {
         >
           {p.product_name ?? "Untitled"}
         </p>
-
         <p className="text-[11px] text-charcoal/50 mb-4 leading-relaxed">
           {materialLabel(p.fibre_composition)}
         </p>
-
         <div className="flex items-baseline justify-between mb-2">
           <span className="text-[13px] text-charcoal">
             {p.price != null ? `€${p.price}` : "—"}
