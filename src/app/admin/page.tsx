@@ -174,6 +174,14 @@ type Submission = {
   created_at: string;
 };
 
+type SavedProduct = {
+  id: number;
+  brand: string | null;
+  product_name: string | null;
+  published: boolean;
+  created_at: string;
+};
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -190,6 +198,7 @@ export default function AdminPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [savedProducts, setSavedProducts] = useState<SavedProduct[]>([]);
 
   const loadSubmissions = useCallback(async (pw: string) => {
     try {
@@ -200,9 +209,32 @@ export default function AdminPage() {
     } catch {}
   }, []);
 
+  const loadSavedProducts = useCallback(async (pw: string) => {
+    try {
+      const res = await fetch("/api/products?all=true", {
+        headers: { "x-admin-password": pw },
+      });
+      if (res.ok) setSavedProducts(await res.json());
+    } catch {}
+  }, []);
+
   useEffect(() => {
-    if (authed) loadSubmissions(password);
-  }, [authed, password, loadSubmissions]);
+    if (authed) {
+      loadSubmissions(password);
+      loadSavedProducts(password);
+    }
+  }, [authed, password, loadSubmissions, loadSavedProducts]);
+
+  async function togglePublish(id: number, published: boolean) {
+    const res = await fetch(`/api/products/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-password": password },
+      body: JSON.stringify({ published }),
+    });
+    if (res.ok) {
+      setSavedProducts((prev) => prev.map((p) => p.id === id ? { ...p, published } : p));
+    }
+  }
 
   async function handleSubmissionStatus(id: number, status: "reviewed" | "dismissed") {
     await fetch(`/api/submissions/${id}`, {
@@ -308,6 +340,7 @@ export default function AdminPage() {
       setSaved(true);
       setProduct(null);
       setUrl("");
+      loadSavedProducts(password);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -388,7 +421,50 @@ export default function AdminPage() {
         </form>
 
         {scrapeError && <p className="text-[12px] text-charcoal/50 mb-6">Error: {scrapeError}</p>}
-        {saved && <p className="text-[13px] mb-6" style={{ color: "#8FA68A" }}>Saved to shop.</p>}
+        {saved && <p className="text-[13px] mb-6" style={{ color: "#8FA68A" }}>Saved as draft — publish it below when ready.</p>}
+
+        {/* Saved products — draft/publish */}
+        {savedProducts.length > 0 && (
+          <div className="mb-16" style={{ borderTop: "1px solid #EDE8DC", paddingTop: "2rem" }}>
+            <p className="text-[10px] tracking-[0.3em] uppercase text-charcoal/40 mb-1">Products</p>
+            <h2
+              className="font-display italic text-charcoal mb-6"
+              style={{ fontSize: "1.5rem", fontWeight: 300, fontFamily: "var(--font-cormorant)" }}
+            >
+              {savedProducts.filter((p) => p.published).length} live, {savedProducts.filter((p) => !p.published).length} draft
+            </h2>
+            <div className="flex flex-col gap-3">
+              {savedProducts.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-3 px-4 py-4"
+                  style={{ border: "1px solid #EDE8DC", background: "#F7F4EE" }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] tracking-[0.25em] uppercase text-charcoal/40 mb-1">
+                      {p.brand ?? "—"}
+                    </p>
+                    <p className="text-[13px] text-charcoal truncate">{p.product_name ?? "Untitled"}</p>
+                  </div>
+                  <span
+                    className="text-[10px] tracking-widest uppercase px-2 py-1"
+                    style={{ color: p.published ? "#8FA68A" : "#C8974A" }}
+                  >
+                    {p.published ? "Live" : "Draft"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => togglePublish(p.id, !p.published)}
+                    className="text-[11px] tracking-widest uppercase text-charcoal px-4 py-1.5 whitespace-nowrap"
+                    style={{ backgroundColor: "#E8C8BE", borderRadius: 0 }}
+                  >
+                    {p.published ? "Unpublish" : "Publish"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Submissions queue */}
         {(() => {

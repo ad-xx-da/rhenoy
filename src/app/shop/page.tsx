@@ -1,3 +1,4 @@
+import { sql } from "@vercel/postgres";
 import EmailCapture from "@/components/EmailCapture";
 import Image from "next/image";
 import Link from "next/link";
@@ -30,13 +31,12 @@ interface DbProduct {
 
 async function getProducts(): Promise<DbProduct[]> {
   try {
-    const baseUrl = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : "http://localhost:3000";
-    const res = await fetch(`${baseUrl}/api/products`, { cache: "no-store" });
-    if (!res.ok) return [];
-    return res.json();
-  } catch {
+    const { rows } = await sql`
+      SELECT * FROM products WHERE published = true ORDER BY created_at DESC
+    `;
+    return rows as DbProduct[];
+  } catch (err) {
+    console.error("[shop] DB query failed:", err instanceof Error ? err.message : err);
     return [];
   }
 }

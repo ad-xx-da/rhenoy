@@ -1,13 +1,17 @@
 import { sql } from "@vercel/postgres";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const wantsAll = req.nextUrl.searchParams.get("all") === "true";
+  const isAdmin = req.headers.get("x-admin-password") === process.env.ADMIN_PASSWORD;
+
   try {
-    const { rows } = await sql`
-      SELECT * FROM products ORDER BY created_at DESC
-    `;
+    const { rows } = wantsAll && isAdmin
+      ? await sql`SELECT * FROM products ORDER BY created_at DESC`
+      : await sql`SELECT * FROM products WHERE published = true ORDER BY created_at DESC`;
     return NextResponse.json(rows);
-  } catch {
+  } catch (err) {
+    console.error("[products] DB query failed:", err instanceof Error ? err.message : err);
     return NextResponse.json([], { status: 200 });
   }
 }

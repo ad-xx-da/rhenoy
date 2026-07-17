@@ -104,6 +104,8 @@ export async function POST(req: NextRequest) {
 
   console.log("[scrape] Requesting URL:", url);
 
+  let lastClaudeError: string | null = null;
+
   // Run Claude extraction and direct page fetch in parallel
   const [claudeResponse, htmlImageUrl] = await Promise.all([
     client.messages.create({
@@ -113,14 +115,18 @@ export async function POST(req: NextRequest) {
       tools: [{ type: "web_search_20250305", name: "web_search" }],
       messages: [{ role: "user", content: `Extract product data from this URL: ${url}` }],
     }).catch((err) => {
-      console.error("[scrape] Claude error:", err instanceof Error ? err.message : err);
+      lastClaudeError = err instanceof Error ? err.message : String(err);
+      console.error("[scrape] Claude error:", lastClaudeError, err);
       return null;
     }),
     fetchImageUrlFromPage(url),
   ]);
 
   if (!claudeResponse) {
-    return NextResponse.json({ error: "Failed to extract product data" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to extract product data", detail: lastClaudeError },
+      { status: 500 }
+    );
   }
 
   const textBlock = claudeResponse.content.find((b) => b.type === "text");

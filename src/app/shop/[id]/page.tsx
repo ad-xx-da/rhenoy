@@ -1,3 +1,4 @@
+import { sql } from "@vercel/postgres";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -25,13 +26,12 @@ interface DbProduct {
 
 async function getProduct(id: string): Promise<DbProduct | null> {
   try {
-    const baseUrl = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : "http://localhost:3000";
-    const res = await fetch(`${baseUrl}/api/products/${id}`, { cache: "no-store" });
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
+    const { rows } = await sql`
+      SELECT * FROM products WHERE id = ${id} AND published = true
+    `;
+    return (rows[0] as DbProduct) ?? null;
+  } catch (err) {
+    console.error("[shop/[id]] DB query failed:", err instanceof Error ? err.message : err);
     return null;
   }
 }

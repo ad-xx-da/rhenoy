@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
       ADD COLUMN IF NOT EXISTS fair_price_spanning_countries TEXT[],
       ADD COLUMN IF NOT EXISTS manufacturing_location TEXT,
       ADD COLUMN IF NOT EXISTS garment_type TEXT,
-      ADD COLUMN IF NOT EXISTS image_url TEXT
+      ADD COLUMN IF NOT EXISTS image_url TEXT,
+      ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT false
   `;
 
   return NextResponse.json({ ok: true });
