@@ -41,24 +41,30 @@ export async function POST(req: NextRequest) {
     data_completeness,
   } = body;
 
-  const { rows } = await sql`
-    INSERT INTO products (
-      url, brand, product_name, fibre_composition, price,
-      fair_price_low, fair_price_high, fair_price_spanning_countries,
-      manufacturing_location, garment_type, image_url,
-      breathability_score, clean_score,
-      factory_transparency, data_completeness
-    ) VALUES (
-      ${url}, ${brand}, ${product_name},
-      ${JSON.stringify(fibre_composition)},
-      ${price ?? null}, ${fair_price_low ?? null}, ${fair_price_high ?? null},
-      ${fair_price_spanning_countries ?? null},
-      ${manufacturing_location}, ${garment_type ?? null}, ${image_url ?? null},
-      ${breathability_score ?? null}, ${clean_score ?? null},
-      ${factory_transparency}, ${data_completeness ?? null}
-    )
-    RETURNING id
-  `;
+  try {
+    const { rows } = await sql`
+      INSERT INTO products (
+        url, brand, product_name, fibre_composition, price,
+        fair_price_low, fair_price_high, fair_price_spanning_countries,
+        manufacturing_location, garment_type, image_url,
+        breathability_score, clean_score,
+        factory_transparency, data_completeness
+      ) VALUES (
+        ${url}, ${brand}, ${product_name},
+        ${JSON.stringify(fibre_composition)},
+        ${price ?? null}, ${fair_price_low ?? null}, ${fair_price_high ?? null},
+        ${fair_price_spanning_countries ?? null},
+        ${manufacturing_location}, ${garment_type ?? null}, ${image_url ?? null},
+        ${breathability_score ?? null}, ${clean_score ?? null},
+        ${factory_transparency}, ${data_completeness ?? null}
+      )
+      RETURNING id
+    `;
 
-  return NextResponse.json({ ok: true, id: rows[0].id });
+    return NextResponse.json({ ok: true, id: rows[0].id });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[products] Insert failed:", detail);
+    return NextResponse.json({ error: "Save failed", detail }, { status: 500 });
+  }
 }

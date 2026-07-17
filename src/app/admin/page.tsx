@@ -336,7 +336,7 @@ export default function AdminPage() {
         body: JSON.stringify(finalProduct),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Save failed");
+      if (!res.ok) throw new Error(data.detail ?? data.error ?? "Save failed");
       setSaved(true);
       setProduct(null);
       setUrl("");
