@@ -183,6 +183,32 @@ type SavedProduct = {
   created_at: string;
 };
 
+function toNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
+}
+
+function dbRowToEditable(row: Record<string, unknown>): EditableProduct {
+  return {
+    url: (row.url as string) ?? "",
+    brand: (row.brand as string) ?? "",
+    product_name: (row.product_name as string) ?? "",
+    fibre_composition: (row.fibre_composition as FiberRow[] | null) ?? [],
+    price: toNum(row.price),
+    garment_type: (row.garment_type as GarmentType | null) ?? null,
+    fair_price_low: toNum(row.fair_price_low),
+    fair_price_high: toNum(row.fair_price_high),
+    fair_price_spanning_countries: (row.fair_price_spanning_countries as string[] | null) ?? null,
+    manufacturing_location: (row.manufacturing_location as ManufacturingLocation) ?? "not-disclosed",
+    breathability_score: toNum(row.breathability_score),
+    clean_score: toNum(row.clean_score),
+    factory_transparency: (row.factory_transparency as TransparencyValue) ?? "partial",
+    data_completeness: toNum(row.data_completeness),
+    image_url: (row.image_url as string | null) ?? null,
+  };
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -195,8 +221,11 @@ export default function AdminPage() {
   const [scrapeError, setScrapeError] = useState<string | null>(null);
 
   const [product, setProduct] = useState<EditableProduct | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [loadingEdit, setLoadingEdit] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [savedMessage, setSavedMessage] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -226,6 +255,35 @@ export default function AdminPage() {
       loadSavedProducts(password);
     }
   }, [authed, password, loadSubmissions, loadSavedProducts]);
+
+  async function loadProductForEdit(id: number) {
+    setLoadingEdit(true);
+    setScrapeError(null);
+    setSaveError(null);
+    setSaved(false);
+    try {
+      const res = await fetch(`/api/products/${id}`, {
+        headers: { "x-admin-password": password },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not load product");
+      setProduct(dbRowToEditable(data));
+      setEditingId(id);
+      setUrl(data.url ?? "");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      setScrapeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingEdit(false);
+    }
+  }
+
+  function cancelEdit() {
+    setProduct(null);
+    setEditingId(null);
+    setUrl("");
+    setSaveError(null);
+  }
 
   async function togglePublish(id: number, published: boolean) {
     const res = await fetch(`/api/products/${id}`, {
@@ -264,6 +322,7 @@ export default function AdminPage() {
     setScraping(true);
     setScrapeError(null);
     setProduct(null);
+    setEditingId(null);
     setSaved(false);
     try {
       const res = await fetch("/api/scrape", {
@@ -332,15 +391,18 @@ export default function AdminPage() {
         }
       }
 
-      const res = await fetch("/api/products", {
-        method: "POST",
+      const isEdit = editingId !== null;
+      const res = await fetch(isEdit ? `/api/products/${editingId}` : "/api/products", {
+        method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": password },
         body: JSON.stringify(finalProduct),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail ?? data.error ?? "Save failed");
+      setSavedMessage(isEdit ? "Saved." : "Saved as draft — publish it below when ready.");
       setSaved(true);
       setProduct(null);
+      setEditingId(null);
       setUrl("");
       loadSavedProducts(password);
     } catch (err) {
@@ -453,7 +515,7 @@ export default function AdminPage() {
         </form>
 
         {scrapeError && <p className="text-[12px] text-charcoal/50 mb-6">Error: {scrapeError}</p>}
-        {saved && <p className="text-[13px] mb-6" style={{ color: "#8FA68A" }}>Saved as draft — publish it below when ready.</p>}
+        {saved && <p className="text-[13px] mb-6" style={{ color: "#8FA68A" }}>{savedMessage}</p>}
 
         {/* Saved products — draft/publish */}
         {savedProducts.length > 0 && (
@@ -484,6 +546,14 @@ export default function AdminPage() {
                   >
                     {p.published ? "Live" : "Draft"}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => loadProductForEdit(p.id)}
+                    disabled={loadingEdit}
+                    className="text-[11px] tracking-widest uppercase text-charcoal/50 hover:text-charcoal px-2 disabled:opacity-40"
+                  >
+                    Edit
+                  </button>
                   <button
                     type="button"
                     onClick={() => togglePublish(p.id, !p.published)}
@@ -566,6 +636,19 @@ export default function AdminPage() {
             className="flex flex-col gap-6"
             style={{ background: "#F7F4EE", border: "1px solid #C8BFB0", borderRadius: "8px", padding: "2rem" }}
           >
+            {editingId !== null && (
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] tracking-[0.3em] uppercase text-charcoal/40">Editing saved product</p>
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  className="text-[11px] tracking-widest uppercase text-charcoal/40 hover:text-charcoal/70"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
             {/* Product image */}
             <Field label="Product image" missing={!product.image_url}>
               {product.image_url ? (
@@ -771,7 +854,7 @@ export default function AdminPage() {
                 title={garmentMissing ? "Select a garment type first" : undefined}
                 style={{ backgroundColor: "#E8C8BE", borderRadius: 0 }}
               >
-                {saving ? "Saving…" : "Save to Shop"}
+                {saving ? "Saving…" : editingId !== null ? "Save changes" : "Save to Shop"}
               </button>
               {saveError && <p className="text-[12px] text-charcoal/40">{saveError}</p>}
             </div>
