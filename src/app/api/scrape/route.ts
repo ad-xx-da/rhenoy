@@ -87,7 +87,11 @@ async function uploadImageToBlob(imageUrl: string): Promise<string | null> {
     const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
     const imgBuffer = await imgRes.arrayBuffer();
     const filename = `products/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const blob = await put(filename, imgBuffer, { access: "public", contentType });
+    const blob = await put(filename, imgBuffer, {
+      access: "public",
+      contentType,
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
     console.log("[scrape] Image uploaded to Blob:", blob.url);
     return blob.url;
   } catch (err) {

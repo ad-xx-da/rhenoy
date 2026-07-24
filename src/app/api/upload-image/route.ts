@@ -1,12 +1,36 @@
 import { put } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 
-// Accepts a remote image URL, downloads it, and re-hosts it on Vercel Blob.
-// Used when the admin pastes an image URL manually.
+// Accepts either a remote image URL (JSON body) which gets downloaded and
+// re-hosted, or a direct file upload (multipart/form-data) — used by the
+// journal editor for inserting local images/gifs.
 export async function POST(req: NextRequest) {
   const auth = req.headers.get("x-admin-password");
   if (auth !== process.env.ADMIN_PASSWORD) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const contentType = req.headers.get("content-type") ?? "";
+
+  if (contentType.includes("multipart/form-data")) {
+    try {
+      const formData = await req.formData();
+      const file = formData.get("file");
+      if (!(file instanceof File)) {
+        return NextResponse.json({ error: "No file provided" }, { status: 400 });
+      }
+      const buffer = await file.arrayBuffer();
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const filename = `journal/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const blob = await put(filename, buffer, {
+        access: "public",
+        contentType: file.type || "application/octet-stream",
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+      });
+      return NextResponse.json({ url: blob.url });
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+    }
   }
 
   const { url } = await req.json();
@@ -24,7 +48,11 @@ export async function POST(req: NextRequest) {
     const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
     const buffer = await imgRes.arrayBuffer();
     const filename = `products/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const blob = await put(filename, buffer, { access: "public", contentType });
+    const blob = await put(filename, buffer, {
+      access: "public",
+      contentType,
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
     return NextResponse.json({ url: blob.url });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });

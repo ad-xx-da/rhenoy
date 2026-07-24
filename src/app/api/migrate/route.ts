@@ -37,5 +37,18 @@ export async function POST(req: NextRequest) {
       ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT false
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS articles (
+      id           SERIAL PRIMARY KEY,
+      slug         TEXT UNIQUE NOT NULL,
+      title        TEXT,
+      excerpt      TEXT,
+      cover_image  TEXT,
+      body         TEXT,
+      published    BOOLEAN NOT NULL DEFAULT false,
+      created_at   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+
   return NextResponse.json({ ok: true });
 }

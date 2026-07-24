@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
+import JournalAdmin from "@/components/JournalAdmin";
 import {
   calcScores,
   matchFiber,
@@ -187,6 +188,7 @@ type SavedProduct = {
 export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [authed, setAuthed] = useState(false);
+  const [activeTab, setActiveTab] = useState<"products" | "journal">("products");
 
   const [url, setUrl] = useState("");
   const [scraping, setScraping] = useState(false);
@@ -395,13 +397,43 @@ export default function AdminPage() {
         <div className="mb-10" style={{ borderBottom: "1px solid #EDE8DC", paddingBottom: "1.5rem" }}>
           <p className="text-[10px] tracking-[0.3em] uppercase text-charcoal/40 mb-1">Admin</p>
           <h1
-            className="font-display italic text-charcoal"
+            className="font-display italic text-charcoal mb-6"
             style={{ fontSize: "2rem", fontWeight: 300, fontFamily: "var(--font-cormorant)" }}
           >
-            Add a product
+            {activeTab === "products" ? "Add a product" : "Journal"}
           </h1>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab("products")}
+              className="text-[11px] tracking-widest uppercase px-4 py-1.5"
+              style={{
+                backgroundColor: activeTab === "products" ? "#E8C8BE" : "transparent",
+                color: "#2C2B27",
+                border: activeTab === "products" ? "none" : "1px solid #C8BFB0",
+              }}
+            >
+              Products
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("journal")}
+              className="text-[11px] tracking-widest uppercase px-4 py-1.5"
+              style={{
+                backgroundColor: activeTab === "journal" ? "#E8C8BE" : "transparent",
+                color: "#2C2B27",
+                border: activeTab === "journal" ? "none" : "1px solid #C8BFB0",
+              }}
+            >
+              Journal
+            </button>
+          </div>
         </div>
 
+        {activeTab === "journal" && <JournalAdmin password={password} />}
+
+        {activeTab === "products" && (
+        <>
         <form onSubmit={handleScrape} className="flex gap-2 mb-10">
           <input
             type="url"
@@ -744,6 +776,8 @@ export default function AdminPage() {
               {saveError && <p className="text-[12px] text-charcoal/40">{saveError}</p>}
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

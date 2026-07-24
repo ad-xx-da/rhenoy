@@ -1,8 +1,32 @@
+import { sql } from "@vercel/postgres";
 import { notFound } from "next/navigation";
-import { articles } from "@/data/articles";
 
-export function generateStaticParams() {
-  return articles.map((a) => ({ slug: a.slug }));
+export const dynamic = "force-dynamic";
+
+interface DbArticle {
+  id: number;
+  slug: string;
+  title: string | null;
+  excerpt: string | null;
+  cover_image: string | null;
+  body: string | null;
+  created_at: string;
+}
+
+async function getArticle(slug: string): Promise<DbArticle | null> {
+  try {
+    const { rows } = await sql`
+      SELECT * FROM articles WHERE slug = ${slug} AND published = true
+    `;
+    return (rows[0] as DbArticle) ?? null;
+  } catch (err) {
+    console.error("[journal/[slug]] DB query failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
 
 export async function generateMetadata({
@@ -11,7 +35,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const article = articles.find((a) => a.slug === slug);
+  const article = await getArticle(slug);
   if (!article) return {};
   return { title: `${article.title} — rhenoy collective` };
 }
@@ -22,22 +46,17 @@ export default async function ArticlePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const article = articles.find((a) => a.slug === slug);
+  const article = await getArticle(slug);
   if (!article) notFound();
-
-  const paragraphs = article.body
-    .split("\n\n")
-    .map((p: string) => p.trim())
-    .filter(Boolean);
 
   return (
     <div className="bg-cream min-h-screen">
       {/* Cover image */}
       <div className="w-full h-[50vh] sm:h-[60vh] overflow-hidden">
-        {article.coverImage ? (
+        {article.cover_image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={article.coverImage}
+            src={article.cover_image}
             alt=""
             className="w-full h-full object-cover"
           />
@@ -49,7 +68,7 @@ export default async function ArticlePage({
       {/* Article */}
       <div className="max-w-[680px] mx-auto px-6 py-16">
         <p className="text-[10px] tracking-[0.35em] uppercase text-charcoal/50 mb-4">
-          {article.date}
+          {formatDate(article.created_at)}
         </p>
         <h1
           className="font-display italic text-charcoal leading-[1.1] mb-12"
@@ -58,16 +77,10 @@ export default async function ArticlePage({
           {article.title}
         </h1>
 
-        <div className="space-y-6">
-          {paragraphs.map((para: string, i: number) => (
-            <p
-              key={i}
-              className="text-[15px] font-light text-charcoal/80 leading-[1.8]"
-            >
-              {para}
-            </p>
-          ))}
-        </div>
+        <div
+          className="journal-article-body"
+          dangerouslySetInnerHTML={{ __html: article.body ?? "" }}
+        />
       </div>
     </div>
   );
