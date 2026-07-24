@@ -50,5 +50,10 @@ export async function POST(req: NextRequest) {
     )
   `;
 
+  await sql`
+    ALTER TABLE articles
+      ADD COLUMN IF NOT EXISTS cover_position TEXT NOT NULL DEFAULT '50% 50%'
+  `;
+
   return NextResponse.json({ ok: true });
 }

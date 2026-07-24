@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { title, excerpt, cover_image, body } = await req.json();
+  const { title, excerpt, cover_image, cover_position, body } = await req.json();
 
   const baseSlug = slugify(title || "untitled");
 
@@ -46,8 +46,8 @@ export async function POST(req: NextRequest) {
     }
 
     const { rows } = await sql`
-      INSERT INTO articles (slug, title, excerpt, cover_image, body, published)
-      VALUES (${slug}, ${title ?? null}, ${excerpt ?? null}, ${cover_image ?? null}, ${body ?? ""}, false)
+      INSERT INTO articles (slug, title, excerpt, cover_image, cover_position, body, published)
+      VALUES (${slug}, ${title ?? null}, ${excerpt ?? null}, ${cover_image ?? null}, ${cover_position ?? "50% 50%"}, ${body ?? ""}, false)
       RETURNING id, slug
     `;
 

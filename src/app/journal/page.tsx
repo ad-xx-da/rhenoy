@@ -13,13 +13,14 @@ interface DbArticle {
   title: string | null;
   excerpt: string | null;
   cover_image: string | null;
+  cover_position: string | null;
   created_at: string;
 }
 
 async function getArticles(): Promise<DbArticle[]> {
   try {
     const { rows } = await sql`
-      SELECT id, slug, title, excerpt, cover_image, created_at
+      SELECT id, slug, title, excerpt, cover_image, cover_position, created_at
       FROM articles WHERE published = true ORDER BY created_at DESC
     `;
     return rows as DbArticle[];
@@ -72,6 +73,7 @@ export default async function JournalPage() {
                       src={article.cover_image}
                       alt=""
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                      style={{ objectPosition: article.cover_position || "50% 50%" }}
                     />
                   ) : (
                     <div

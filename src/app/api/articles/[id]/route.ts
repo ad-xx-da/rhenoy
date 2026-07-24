@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-  const { title, excerpt, cover_image, body, published } = await req.json();
+  const { title, excerpt, cover_image, cover_position, body, published } = await req.json();
 
   try {
     const { rows } = await sql`
@@ -31,6 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         title = COALESCE(${title ?? null}, title),
         excerpt = COALESCE(${excerpt ?? null}, excerpt),
         cover_image = COALESCE(${cover_image ?? null}, cover_image),
+        cover_position = COALESCE(${cover_position ?? null}, cover_position),
         body = COALESCE(${body ?? null}, body),
         published = COALESCE(${published ?? null}, published)
       WHERE id = ${id}

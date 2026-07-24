@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import RichTextEditor from "./RichTextEditor";
+import ImagePositioner from "./ImagePositioner";
 
 type Article = {
   id: number;
@@ -9,10 +10,21 @@ type Article = {
   title: string | null;
   excerpt: string | null;
   cover_image: string | null;
+  cover_position: string | null;
   body: string | null;
   published: boolean;
   created_at: string;
 };
+
+function parsePosition(pos: string | null | undefined): { x: number; y: number } {
+  const match = pos?.match(/(-?[\d.]+)%\s+(-?[\d.]+)%/);
+  if (!match) return { x: 50, y: 50 };
+  return { x: parseFloat(match[1]), y: parseFloat(match[2]) };
+}
+
+function formatPosition(p: { x: number; y: number }): string {
+  return `${p.x.toFixed(1)}% ${p.y.toFixed(1)}%`;
+}
 
 const inputCls =
   "w-full bg-cream border border-[#C8BFB0] text-charcoal text-[13px] px-3 py-2 focus:outline-none focus:border-charcoal/40 transition-colors";
@@ -25,10 +37,18 @@ type EditorState = {
   title: string;
   excerpt: string;
   cover_image: string;
+  cover_position: { x: number; y: number };
   body: string;
 };
 
-const EMPTY_DRAFT: EditorState = { id: null, title: "", excerpt: "", cover_image: "", body: "" };
+const EMPTY_DRAFT: EditorState = {
+  id: null,
+  title: "",
+  excerpt: "",
+  cover_image: "",
+  cover_position: { x: 50, y: 50 },
+  body: "",
+};
 
 export default function JournalAdmin({ password }: { password: string }) {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -63,6 +83,7 @@ export default function JournalAdmin({ password }: { password: string }) {
       title: a.title ?? "",
       excerpt: a.excerpt ?? "",
       cover_image: a.cover_image ?? "",
+      cover_position: parsePosition(a.cover_position),
       body: a.body ?? "",
     });
     setError(null);
@@ -98,6 +119,7 @@ export default function JournalAdmin({ password }: { password: string }) {
           title: draft.title,
           excerpt: draft.excerpt,
           cover_image: draft.cover_image || null,
+          cover_position: formatPosition(draft.cover_position),
           body: draft.body,
         }),
       });
@@ -192,8 +214,13 @@ export default function JournalAdmin({ password }: { password: string }) {
             <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
           </div>
           {draft.cover_image && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={draft.cover_image} alt="" className="mt-3 w-full max-w-xs object-cover" style={{ aspectRatio: "3/2" }} />
+            <div className="mt-3">
+              <ImagePositioner
+                src={draft.cover_image}
+                value={draft.cover_position}
+                onChange={(pos) => setDraft((d) => ({ ...d, cover_position: pos }))}
+              />
+            </div>
           )}
         </div>
 

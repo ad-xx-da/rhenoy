@@ -9,6 +9,7 @@ interface DbArticle {
   title: string | null;
   excerpt: string | null;
   cover_image: string | null;
+  cover_position: string | null;
   body: string | null;
   created_at: string;
 }
@@ -59,6 +60,7 @@ export default async function ArticlePage({
             src={article.cover_image}
             alt=""
             className="w-full h-full object-cover"
+            style={{ objectPosition: article.cover_position || "50% 50%" }}
           />
         ) : (
           <div className="w-full h-full" style={{ backgroundColor: "#D4C5B0" }} />
